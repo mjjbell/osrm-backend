@@ -29,7 +29,10 @@ class WayRestrictionMap
         NodeID from;
         NodeID to;
     };
+    /*
     WayRestrictionMap(const std::vector<ConditionalTurnRestriction> &conditional_restrictions);
+    */
+    WayRestrictionMap(const RestrictionGraph &restriction_graph);
 
     // Check if an edge between two nodes is a restricted turn. The check needs to be performed to
     // find duplicated nodes during the creation of edge-based-edges
@@ -40,20 +43,27 @@ class WayRestrictionMap
     // non-only restrictions that share the same in/via combination)
     std::size_t NumberOfDuplicatedNodes() const;
 
+    std::vector<ViaWay> DuplicatedViaWays() const;
+    /*
     // Returns a representative for each duplicated node, consisting of the representative ID (first
     // ID of the nodes restrictions) and the from/to vertices of the via-way
     // This is used to construct edge based nodes that act as intermediate nodes.
     std::vector<ViaWay> DuplicatedNodeRepresentatives() const;
+    */
 
     // Access all duplicated NodeIDs for a set of nodes indicating a via way
     std::vector<DuplicatedNodeID> DuplicatedNodeIDs(const NodeID from, const NodeID to) const;
 
     // check whether a turn onto a given node is restricted, when coming from a duplicated node
     bool IsRestricted(DuplicatedNodeID duplicated_node, const NodeID to) const;
+    /*
     // Get the restriction resulting in ^ IsRestricted. Requires IsRestricted to evaluate to true
     const ConditionalTurnRestriction &GetRestriction(DuplicatedNodeID duplicated_node,
                                                      const NodeID to) const;
+    */
+    std::vector<const TurnRestriction*> GetRestrictions(DuplicatedNodeID duplicated_node, const NodeID to) const;
 
+    /*
     // changes edge_based_node to the correct duplicated_node_id in case node_based_from,
     // node_based_via, node_based_to can be identified with a restriction group
     NodeID RemapIfRestricted(const NodeID edge_based_node,
@@ -61,9 +71,23 @@ class WayRestrictionMap
                              const NodeID node_based_via,
                              const NodeID node_based_to,
                              const NodeID number_of_edge_based_nodes) const;
+     */
+
+    NodeID RemapIfRestrictionStart(const NodeID edge_based_node,
+                                   const NodeID node_based_from,
+                                   const NodeID node_based_via,
+                                   const NodeID node_based_to,
+                                   const NodeID number_of_edge_based_nodes) const;
+
+    NodeID RemapIfRestrictionVia(const NodeID edge_based_target_node,
+                                 const DuplicatedNodeID edge_based_via_node,
+                                 const NodeID node_based_to,
+                                 const NodeID number_of_edge_based_nodes) const;
 
   private:
+    /*
     DuplicatedNodeID AsDuplicatedNodeID(const RestrictionID restriction_id) const;
+     */
 
     // access all restrictions that have the same starting way and via way. Any duplicated node
     // represents the same in-way + via-way combination. This vector contains data about all
@@ -81,9 +105,12 @@ class WayRestrictionMap
     //
     //                    EBN: 0 . | 2 | 3 | 4 ...
     // duplicated node groups: ... | 5 | 7 | ...
+    /*
     std::vector<DuplicatedNodeID> duplicated_node_groups;
     std::vector<ConditionalTurnRestriction> restriction_data;
     RestrictionIndex<ConditionalTurnRestriction> restriction_starts;
+     */
+    const RestrictionGraph& restriction_graph;
 };
 
 } // namespace extractor

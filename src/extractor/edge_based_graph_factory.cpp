@@ -377,7 +377,7 @@ EdgeBasedGraphFactory::GenerateEdgeExpandedNodes(const WayRestrictionMap &way_re
     // Add copies of the nodes
     {
         util::UnbufferedLog log;
-        const auto via_ways = way_restriction_map.DuplicatedNodeRepresentatives();
+        const auto via_ways = way_restriction_map.DuplicatedViaWays();
         util::Percent progress(log, via_ways.size());
 
         NodeID edge_based_node_id =
@@ -587,7 +587,7 @@ void EdgeBasedGraphFactory::GenerateEdgeExpandedEdges(
             boost::optional<Conditional> conditional = boost::none;
             if (node_restricted.first)
             {
-                auto const &conditions = node_restricted.second->condition;
+                auto const &conditions = node_restricted.second->instructions.condition;
                 // get conditions of the restriction limiting the node
                 conditional = {{edge_based_node_from,
                                 edge_based_node_to,
@@ -769,6 +769,14 @@ void EdgeBasedGraphFactory::GenerateEdgeExpandedEdges(
 
                         for (const auto &outgoing_edge : outgoing_edges)
                         {
+
+/*
+                            std::cout << "Processing" << std::endl;
+                            std::cout << incoming_edge.node << std::endl;
+                            std::cout << outgoing_edge.node << std::endl;
+                            std::cout << m_node_based_graph.GetTarget(outgoing_edge.edge) << std::endl;
+                            std::cout << "----" << std::endl;
+*/
                             auto is_turn_allowed =
                                 intersection::isTurnAllowed(m_node_based_graph,
                                                             m_edge_based_node_container,
@@ -781,7 +789,15 @@ void EdgeBasedGraphFactory::GenerateEdgeExpandedEdges(
                             buffer->checksum.process_bit(is_turn_allowed);
 
                             if (!is_turn_allowed)
+                            {
+/*
+                                std::cout << "Turn not allowed" << std::endl;
+                                std::cout << incoming_edge.node << std::endl;
+                                std::cout << outgoing_edge.node << std::endl;
+                                std::cout << m_node_based_graph.GetTarget(outgoing_edge.edge) << std::endl;
+*/
                                 continue;
+                            }
 
                             const auto turn =
                                 std::find_if(intersection_view.begin(),
@@ -877,19 +893,28 @@ void EdgeBasedGraphFactory::GenerateEdgeExpandedEdges(
                             // ab via bc to cd
                             // ab via be to ef
                             //
-                            // has two artifical nodes (be/bc) with restrictions starting at `ab`.
+                            // has two artificial nodes (be/bc) with restrictions starting at `ab`.
                             // Since every restriction group (abc | abe) refers to the same
                             // artificial node, we simply have to find a single representative for
                             // the turn. Here we check whether the turn in question is the start of
                             // a via way restriction. If that should be the case, we switch the id
                             // of the edge-based-node for the target to the ID of the duplicated
                             // node associated with the turn. (e.g. ab via bc switches bc to bc_dup)
-                            auto const target_id = way_restriction_map.RemapIfRestricted(
+                            auto const target_id = way_restriction_map.RemapIfRestrictionStart(
                                 nbe_to_ebn_mapping[outgoing_edge.edge],
                                 incoming_edge.node,
                                 outgoing_edge.node,
                                 m_node_based_graph.GetTarget(outgoing_edge.edge),
                                 m_number_of_edge_based_nodes);
+
+/*
+                            std::cout << " REMAPPING RESTRICTION START" << std::endl;
+                            std::cout << nbe_to_ebn_mapping[outgoing_edge.edge] << std::endl;
+                            std::cout << incoming_edge.node << std::endl;
+                            std::cout << outgoing_edge.node << std::endl;
+                            std::cout << m_node_based_graph.GetTarget(outgoing_edge.edge) << std::endl;
+                            std::cout << target_id << std::endl;
+*/
 
                             /***************************/
 
@@ -964,11 +989,23 @@ void EdgeBasedGraphFactory::GenerateEdgeExpandedEdges(
 
                                     if (is_way_restricted)
                                     {
-                                        auto const restriction = way_restriction_map.GetRestriction(
+                                        auto const& restrictions = way_restriction_map.GetRestrictions(
                                             duplicated_node_id, node_at_end_of_turn);
 
-                                        if (restriction.condition.empty())
+                                        bool isUnconditional = false;
+
+                                        for (const auto& restriction: restrictions) {
+                                            if (restriction->instructions.condition.empty()) {
+                                                isUnconditional = true;
+                                                break;
+                                            }
+                                        }
+
+//                                        util::Log() << "bump 2";
+
+                                        if (isUnconditional) {
                                             continue;
+                                        }
 
                                         // add into delayed data
                                         auto edge_with_data_and_condition =
@@ -992,22 +1029,39 @@ void EdgeBasedGraphFactory::GenerateEdgeExpandedEdges(
                                         }
 
                                         // also add the conditions for the way
-                                        if (is_way_restricted && !restriction.condition.empty())
+                                        for (const auto& restriction: restrictions)
                                         {
-                                            // add a new conditional for the edge we just created
-                                            buffer->conditionals.push_back(
-                                                {from_id,
-                                                 nbe_to_ebn_mapping[outgoing_edge.edge],
-                                                 {static_cast<std::uint64_t>(-1),
-                                                  m_coordinates[intersection_node],
-                                                  restriction.condition}});
+                                            if (is_way_restricted && !restriction->instructions.condition.empty())
+                                            {
+                                                // add a new conditional for the edge we just created
+                                                buffer->conditionals.push_back(
+                                                    {from_id,
+                                                     nbe_to_ebn_mapping[outgoing_edge.edge],
+                                                     {static_cast<std::uint64_t>(-1),
+                                                      m_coordinates[intersection_node],
+                                                      restriction->instructions.condition}});
+                                            }
                                         }
                                     }
                                     else
                                     {
+                                        auto const via_target_id = way_restriction_map.RemapIfRestrictionVia(
+                                            nbe_to_ebn_mapping[outgoing_edge.edge],
+                                            from_id,
+                                            m_node_based_graph.GetTarget(outgoing_edge.edge),
+                                            m_number_of_edge_based_nodes);
+
+/*
+                                        std::cout << " REMAPPING RESTRICTION VIA" << std::endl;
+                                        std::cout << nbe_to_ebn_mapping[outgoing_edge.edge] << std::endl;
+                                        std::cout << from_id << std::endl;
+                                        std::cout << m_node_based_graph.GetTarget(outgoing_edge.edge) << std::endl;
+                                        std::cout << via_target_id << std::endl;
+*/
+
                                         auto edge_with_data_and_condition =
                                             generate_edge(from_id,
-                                                          nbe_to_ebn_mapping[outgoing_edge.edge],
+                                                          via_target_id,
                                                           incoming_edge.node,
                                                           incoming_edge.edge,
                                                           outgoing_edge.node,

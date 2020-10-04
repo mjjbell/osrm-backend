@@ -433,19 +433,25 @@ bool isTurnRestricted(const RestrictionsRange &restrictions, const NodeID to)
     //     d
     //     |
     // a - b - c  and `only_straight_on ab | bc would return `c` for `a,b`
-    const auto is_only = std::find_if(restrictions.first,
-                                      restrictions.second,
-                                      [](const auto &pair) { return pair.second->is_only; });
-    if (is_only != restrictions.second)
-        return is_only->second->AsNodeRestriction().to != to;
+    const auto is_only = std::find_if(restrictions.begin(),
+                                      restrictions.end(),
+                                      [&to](const auto *restriction) {
+                                     //   std::cout << "Checking is only restricted " << to << " <> " << restriction->via_restriction.to << " - " << restriction->instructions.is_only << std::endl;
+                                          return restriction->instructions.is_only; });
+    if (is_only != restrictions.end()) {
+//        std::cout << "Found something  " << std::endl;
+ //       std::cout << (*is_only)->via_restriction.to << std::endl;
+        return (*is_only)->via_restriction.to != to;
+    }
 
     // Check if explicitly forbidden
     const auto no_turn =
-        std::find_if(restrictions.first, restrictions.second, [&to](const auto &restriction) {
-            return restriction.second->AsNodeRestriction().to == to;
+        std::find_if(restrictions.begin(), restrictions.end(), [&to](const auto *restriction) {
+  //        std::cout << "Checking no_turn restricted " << to << " <> " << restriction->via_restriction.to << std::endl;
+          return restriction->via_restriction.to == to;
         });
 
-    return no_turn != restrictions.second;
+    return no_turn != restrictions.end();
 }
 
 bool isTurnAllowed(const util::NodeBasedDynamicGraph &graph,
@@ -468,8 +474,10 @@ bool isTurnAllowed(const util::NodeBasedDynamicGraph &graph,
     auto const &restrictions = restriction_map.Restrictions(from.node, intersection_node);
 
     // Check if turn is explicitly restricted by a turn restriction
-    if (isTurnRestricted(restrictions, destination_node))
+    if (isTurnRestricted(restrictions, destination_node)) {
+//        std::cout << "Is turn restricted" << std::endl;
         return false;
+    }
 
     // Precompute reversed bearing of the `from` edge
     const auto from_edge_reversed_bearing =

@@ -25,7 +25,6 @@ void GraphCompressor::Compress(
     const std::unordered_set<NodeID> &traffic_signals,
     ScriptingEnvironment &scripting_environment,
     std::vector<TurnRestriction> &turn_restrictions,
-    std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions,
     std::vector<UnresolvedManeuverOverride> &maneuver_overrides,
     util::NodeBasedDynamicGraph &graph,
     const std::vector<NodeBasedEdgeAnnotation> &node_data_container,
@@ -35,31 +34,19 @@ void GraphCompressor::Compress(
     const unsigned original_number_of_edges = graph.GetNumberOfEdges();
 
     RestrictionCompressor restriction_compressor(
-        turn_restrictions, conditional_turn_restrictions, maneuver_overrides);
+        turn_restrictions, maneuver_overrides);
 
     // we do not compress turn restrictions on degree two nodes. These nodes are usually used to
     // indicated `directed` barriers
     std::unordered_set<NodeID> restriction_via_nodes;
 
+    // We keep the first/last via nodes so we know how to enter/exit the restriction graph and therefore
+    // apply the restrictions correctly.
     const auto remember_via_nodes = [&](const auto &restriction) {
-        if (restriction.Type() == RestrictionType::NODE_RESTRICTION)
-        {
-            const auto &node = restriction.AsNodeRestriction();
-            restriction_via_nodes.insert(node.via);
-        }
-        else
-        {
-            BOOST_ASSERT(restriction.Type() == RestrictionType::WAY_RESTRICTION);
-            const auto &way = restriction.AsWayRestriction();
-            restriction_via_nodes.insert(way.in_restriction.via);
-            restriction_via_nodes.insert(way.out_restriction.via);
-        }
+      restriction_via_nodes.insert(restriction.via_restriction.via.front());
+      restriction_via_nodes.insert(restriction.via_restriction.via.back());
     };
     std::for_each(turn_restrictions.begin(), turn_restrictions.end(), remember_via_nodes);
-    std::for_each(conditional_turn_restrictions.begin(),
-                  conditional_turn_restrictions.end(),
-                  remember_via_nodes);
-
     {
         const auto weight_multiplier =
             scripting_environment.GetProfileProperties().GetWeightMultiplier();
@@ -181,7 +168,7 @@ void GraphCompressor::Compress(
                  * reasonable, since the announcements have to come early anyhow. So there is a
                  * potential danger in here, but it saves us from adding a lot of additional edges
                  * for
-                 * turn-lanes. Without this,we would have to treat any turn-lane beginning/ending
+                 * turn-lanes. Without this, we would have to treat any turn-lane beginning/ending
                  * just
                  * like a barrier.
                  */

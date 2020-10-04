@@ -13,6 +13,7 @@
 #include "extractor/name_table.hpp"
 #include "extractor/node_based_graph_factory.hpp"
 #include "extractor/restriction_filter.hpp"
+#include "extractor/restriction_graph.hpp"
 #include "extractor/restriction_index.hpp"
 #include "extractor/restriction_parser.hpp"
 #include "extractor/scripting_environment.hpp"
@@ -215,11 +216,9 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
 
     LaneDescriptionMap turn_lane_map;
     std::vector<TurnRestriction> turn_restrictions;
-    std::vector<ConditionalTurnRestriction> conditional_turn_restrictions;
     std::vector<UnresolvedManeuverOverride> unresolved_maneuver_overrides;
     std::tie(turn_lane_map,
              turn_restrictions,
-             conditional_turn_restrictions,
              unresolved_maneuver_overrides) =
         ParseOSMData(scripting_environment, number_of_threads);
 
@@ -238,11 +237,24 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
     std::vector<EdgeDistance> edge_based_node_distances;
     std::uint32_t ebg_connectivity_checksum = 0;
 
+
+/*
+    util::Log() << "parsed turn restriction details";
+    for (const auto& turn_restriction: turn_restrictions) {
+        util::Log() << "from " << turn_restriction.via_restriction.from;
+        for (auto via : turn_restriction.via_restriction.via) {
+            util::Log() << "via " << via;
+        }
+        util::Log() << "to " << turn_restriction.via_restriction.to;
+        util::Log() << "is_only " << turn_restriction.instructions.is_only;
+        util::Log() << "--- ";
+    }
+*/
+
     // Create a node-based graph from the OSRM file
     NodeBasedGraphFactory node_based_graph_factory(config.GetPath(".osrm"),
                                                    scripting_environment,
                                                    turn_restrictions,
-                                                   conditional_turn_restrictions,
                                                    unresolved_maneuver_overrides);
 
     NameTable name_table;
@@ -283,8 +295,23 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
     edge_based_nodes_container =
         EdgeBasedNodeDataContainer({}, std::move(node_based_graph_factory.GetAnnotationData()));
 
-    conditional_turn_restrictions =
-        removeInvalidRestrictions(std::move(conditional_turn_restrictions), node_based_graph);
+    util::Log() << "We have " << turn_restrictions.size() << " turn restrictions";
+
+    turn_restrictions = removeInvalidRestrictions(std::move(turn_restrictions), node_based_graph);
+    util::Log() << "Now we have " << turn_restrictions.size() << " turn restrictions";
+    // Create restriction graph here
+    auto restriction_graph =
+        constructRestrictionGraph(turn_restrictions);
+    util::Log() << "Restriction graph";
+    util::Log() << restriction_graph.via_ways.size();
+    for (const auto& restriction_way : restriction_graph.via_ways) {
+        util::Log() << "Restriction";
+        for (const auto& restriction: restriction_way.restrictions) {
+            util::Log() << restriction->via_restriction.to;
+            util::Log() << restriction->instructions.is_only;
+        }
+    }
+    util::Log() << restriction_graph.start_ways.size();
 
     const auto number_of_node_based_nodes = node_based_graph.GetNumberOfNodes();
 
@@ -294,8 +321,7 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
                                node_based_graph_factory.GetCompressedEdges(),
                                barrier_nodes,
                                traffic_signals,
-                               turn_restrictions,
-                               conditional_turn_restrictions,
+                               restriction_graph,
                                segregated_edges,
                                name_table,
                                unresolved_maneuver_overrides,
@@ -314,8 +340,7 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
                          coordinates,
                          node_based_graph_factory.GetCompressedEdges(),
                          barrier_nodes,
-                         turn_restrictions,
-                         conditional_turn_restrictions,
+                         restriction_graph,
                          name_table,
                          std::move(turn_lane_map),
                          scripting_environment);
@@ -376,7 +401,6 @@ int Extractor::run(ScriptingEnvironment &scripting_environment)
 
 std::tuple<LaneDescriptionMap,
            std::vector<TurnRestriction>,
-           std::vector<ConditionalTurnRestriction>,
            std::vector<UnresolvedManeuverOverride>>
 Extractor::ParseOSMData(ScriptingEnvironment &scripting_environment,
                         const unsigned number_of_threads)
@@ -638,8 +662,7 @@ Extractor::ParseOSMData(ScriptingEnvironment &scripting_environment,
     util::Log() << "extraction finished after " << TIMER_SEC(extracting) << "s";
 
     return std::make_tuple(std::move(turn_lane_map),
-                           std::move(extraction_containers.unconditional_turn_restrictions),
-                           std::move(extraction_containers.conditional_turn_restrictions),
+                           std::move(extraction_containers.turn_restrictions),
                            std::move(extraction_containers.internal_maneuver_overrides));
 }
 
@@ -712,8 +735,7 @@ EdgeID Extractor::BuildEdgeExpandedGraph(
     const CompressedEdgeContainer &compressed_edge_container,
     const std::unordered_set<NodeID> &barrier_nodes,
     const std::unordered_set<NodeID> &traffic_signals,
-    const std::vector<TurnRestriction> &turn_restrictions,
-    const std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions,
+    const RestrictionGraph &restriction_graph,
     const std::unordered_set<EdgeID> &segregated_edges,
     const NameTable &name_table,
     const std::vector<UnresolvedManeuverOverride> &maneuver_overrides,
@@ -740,21 +762,10 @@ EdgeID Extractor::BuildEdgeExpandedGraph(
                                                    turn_lane_map);
 
     const auto create_edge_based_edges = [&]() {
-        // scoped to relase intermediate datastructures right after the call
-        std::vector<TurnRestriction> node_restrictions;
-        for (auto const &t : turn_restrictions)
-            if (t.Type() == RestrictionType::NODE_RESTRICTION)
-                node_restrictions.push_back(t);
-
-        std::vector<ConditionalTurnRestriction> conditional_node_restrictions;
-        for (auto const &t : conditional_turn_restrictions)
-            if (t.Type() == RestrictionType::NODE_RESTRICTION)
-                conditional_node_restrictions.push_back(t);
-
-        RestrictionMap via_node_restriction_map(node_restrictions, IndexNodeByFromAndVia());
-        WayRestrictionMap via_way_restriction_map(conditional_turn_restrictions);
-        ConditionalRestrictionMap conditional_node_restriction_map(conditional_node_restrictions,
-                                                                   IndexNodeByFromAndVia());
+        // scoped to release intermediate data structures right after the call
+        RestrictionMap via_node_restriction_map(restriction_graph);
+        WayRestrictionMap via_way_restriction_map(restriction_graph);
+        ConditionalRestrictionMap conditional_node_restriction_map(restriction_graph);
         edge_based_graph_factory.Run(scripting_environment,
                                      config.GetPath(".osrm.turn_weight_penalties").string(),
                                      config.GetPath(".osrm.turn_duration_penalties").string(),
@@ -833,8 +844,7 @@ void Extractor::ProcessGuidanceTurns(
     const std::vector<util::Coordinate> &node_coordinates,
     const CompressedEdgeContainer &compressed_edge_container,
     const std::unordered_set<NodeID> &barrier_nodes,
-    const std::vector<TurnRestriction> &turn_restrictions,
-    const std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions,
+    const RestrictionGraph &restriction_graph,
     const NameTable &name_table,
     LaneDescriptionMap lane_description_map,
     ScriptingEnvironment &scripting_environment)
@@ -853,13 +863,8 @@ void Extractor::ProcessGuidanceTurns(
         SuffixTable street_name_suffix_table(scripting_environment);
         const auto &turn_lanes_data = transformTurnLaneMapIntoArrays(lane_description_map);
 
-        std::vector<TurnRestriction> node_restrictions;
-        for (auto const &t : turn_restrictions)
-            if (t.Type() == RestrictionType::NODE_RESTRICTION)
-                node_restrictions.push_back(t);
-
-        RestrictionMap node_restriction_map(node_restrictions, IndexNodeByFromAndVia());
-        WayRestrictionMap way_restriction_map(conditional_turn_restrictions);
+        RestrictionMap node_restriction_map(restriction_graph);
+        WayRestrictionMap way_restriction_map(restriction_graph);
 
         osrm::guidance::annotateTurns(node_based_graph,
                                       edge_based_node_container,

@@ -29,7 +29,6 @@ class RestrictionCompressor
 {
   public:
     RestrictionCompressor(std::vector<TurnRestriction> &restrictions,
-                          std::vector<ConditionalTurnRestriction> &conditional_turn_restrictions,
                           std::vector<UnresolvedManeuverOverride> &maneuver_overrides);
 
     // account for the compression of `from-via-to` into `from-to`
@@ -40,8 +39,9 @@ class RestrictionCompressor
     // contracted move the head pointer to their respective head. Edges starting at tail move the
     // tail values to their respective tails. Way turn restrictions are represented by two
     // node-restrictions, so we can focus on them alone
-    boost::unordered_multimap<NodeID, NodeRestriction *> starts;
-    boost::unordered_multimap<NodeID, NodeRestriction *> ends;
+    boost::unordered_multimap<NodeID, TurnRestriction *> starts;
+    boost::unordered_multimap<NodeID, TurnRestriction *> vias;
+    boost::unordered_multimap<NodeID, TurnRestriction *> ends;
 
     boost::unordered_multimap<NodeID, NodeBasedTurn *> maneuver_starts;
     boost::unordered_multimap<NodeID, NodeBasedTurn *> maneuver_ends;

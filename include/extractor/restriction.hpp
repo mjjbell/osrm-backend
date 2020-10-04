@@ -30,7 +30,7 @@ struct InputNodeRestriction
     OSMWayID to;
 };
 
-// A restriction that uses a single via-way in between
+// A restriction that uses one or more via-way in between
 //
 // f - e - d
 //     |
@@ -40,7 +40,7 @@ struct InputNodeRestriction
 struct InputWayRestriction
 {
     OSMWayID from;
-    OSMWayID via;
+    std::vector<OSMWayID> via;
     OSMWayID to;
 };
 
@@ -146,14 +146,77 @@ struct WayRestriction
     // parsing the relation, though, we do not know about the final representation in the node-based
     // graph for the restriction. In case of a traffic light, for example, we might end up with bxc
     // not being compressed to bc. For that reason, we need to maintain two node restrictions in
-    // case a way restrction is not fully collapsed
-    NodeRestriction in_restriction;
-    NodeRestriction out_restriction;
+    // case a way restriction is not fully collapsed
+    NodeID from;
+    std::vector<NodeID> via;
+    NodeID to;
+
+    // check if all parts of the restriction reference an actual node
+    bool Valid() const
+    {
+        return from != SPECIAL_NODEID && to != SPECIAL_NODEID && !via.empty() &&
+               std::all_of(via.begin(), via.end(), [](NodeID i){return i != SPECIAL_NODEID;});
+    };
 
     bool operator==(const WayRestriction &other) const
     {
-        return std::tie(in_restriction, out_restriction) ==
-               std::tie(other.in_restriction, other.out_restriction);
+        return std::tie(from, via, to) ==
+               std::tie(other.from, other.via, other.to);
+    }
+};
+
+struct ViaRestriction
+{
+    // a way restriction in OSRM is essentially a dual node turn restriction;
+    //
+    // |     |
+    // c -x- b
+    // |     |
+    // d     a
+    //
+    // from ab via bxc to cd: no_uturn
+    //
+    // Technically, we would need only a,b,c,d to describe the full turn in terms of nodes. When
+    // parsing the relation, though, we do not know about the final representation in the node-based
+    // graph for the restriction. In case of a traffic light, for example, we might end up with bxc
+    // not being compressed to bc. For that reason, we need to maintain two node restrictions in
+    // case a way restriction is not fully collapsed
+    NodeID from;
+    std::vector<NodeID> via;
+    NodeID to;
+
+    // check if all parts of the restriction reference an actual node
+    bool Valid() const
+    {
+        return from != SPECIAL_NODEID && to != SPECIAL_NODEID && !via.empty() &&
+               std::all_of(via.begin(), via.end(), [](NodeID i){return i != SPECIAL_NODEID;});
+    };
+
+    bool operator==(const ViaRestriction &other) const
+    {
+        return std::tie(from, via, to) ==
+               std::tie(other.from, other.via, other.to);
+    }
+};
+
+struct Instructions {
+    bool is_only;
+    std::vector<util::OpeningHours> condition;
+
+    explicit Instructions(bool is_only, std::vector<util::OpeningHours> condition)
+    : is_only(is_only), condition(condition)
+    {
+    }
+
+    explicit Instructions()
+    {
+        is_only = false;
+    }
+
+    bool operator==(const Instructions &other) const
+    {
+        if (is_only != other.is_only)
+            return false;
     }
 };
 
@@ -162,94 +225,36 @@ struct WayRestriction
 struct TurnRestriction
 {
     // keep in the same order as the turn restrictions above
-    mapbox::util::variant<NodeRestriction, WayRestriction> node_or_way;
-    bool is_only;
-
-    // construction for NodeRestrictions
-    explicit TurnRestriction(NodeRestriction node_restriction, bool is_only = false)
-        : node_or_way(node_restriction), is_only(is_only)
-    {
-    }
+    ViaRestriction via_restriction;
+    Instructions instructions;
 
     // construction for WayRestrictions
-    explicit TurnRestriction(WayRestriction way_restriction, bool is_only = false)
-        : node_or_way(way_restriction), is_only(is_only)
+    explicit TurnRestriction(ViaRestriction via_restriction, Instructions instructions)
+        : via_restriction(via_restriction), instructions(instructions)
     {
     }
 
     explicit TurnRestriction()
     {
-        node_or_way = NodeRestriction{SPECIAL_EDGEID, SPECIAL_NODEID, SPECIAL_EDGEID};
-    }
-
-    WayRestriction &AsWayRestriction()
-    {
-        BOOST_ASSERT(node_or_way.which() == RestrictionType::WAY_RESTRICTION);
-        return mapbox::util::get<WayRestriction>(node_or_way);
-    }
-
-    const WayRestriction &AsWayRestriction() const
-    {
-        BOOST_ASSERT(node_or_way.which() == RestrictionType::WAY_RESTRICTION);
-        return mapbox::util::get<WayRestriction>(node_or_way);
-    }
-
-    NodeRestriction &AsNodeRestriction()
-    {
-        BOOST_ASSERT(node_or_way.which() == RestrictionType::NODE_RESTRICTION);
-        return mapbox::util::get<NodeRestriction>(node_or_way);
-    }
-
-    const NodeRestriction &AsNodeRestriction() const
-    {
-        BOOST_ASSERT(node_or_way.which() == RestrictionType::NODE_RESTRICTION);
-        return mapbox::util::get<NodeRestriction>(node_or_way);
-    }
-
-    RestrictionType Type() const
-    {
-        BOOST_ASSERT(node_or_way.which() < RestrictionType::NUM_RESTRICTION_TYPES);
-        return static_cast<RestrictionType>(node_or_way.which());
+        via_restriction = ViaRestriction{SPECIAL_EDGEID, {SPECIAL_NODEID}, SPECIAL_EDGEID};
     }
 
     // check if all elements of the edge are considered valid
     bool Valid() const
     {
-        if (node_or_way.which() == RestrictionType::WAY_RESTRICTION)
-        {
-            auto const &restriction = AsWayRestriction();
-            return restriction.in_restriction.Valid() && restriction.out_restriction.Valid();
-        }
-        else
-        {
-            auto const &restriction = AsNodeRestriction();
-            return restriction.Valid();
-        }
+        return via_restriction.Valid();
     }
 
     bool operator==(const TurnRestriction &other) const
     {
-        if (is_only != other.is_only)
+        if (!(instructions == other.instructions))
             return false;
 
-        if (Type() != other.Type())
-            return false;
-
-        if (Type() == RestrictionType::WAY_RESTRICTION)
-        {
-            return AsWayRestriction() == other.AsWayRestriction();
-        }
-        else
-        {
-            return AsNodeRestriction() == other.AsNodeRestriction();
-        }
+        return via_restriction == other.via_restriction;
     }
 };
 
-struct ConditionalTurnRestriction : TurnRestriction
-{
-    std::vector<util::OpeningHours> condition;
-};
+
 }
 }
 

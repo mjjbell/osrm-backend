@@ -129,7 +129,8 @@ RestrictionParser::TryParse(const osmium::Relation &relation) const
 
     constexpr auto INVALID_OSM_ID = std::numeric_limits<std::uint64_t>::max();
     auto from = INVALID_OSM_ID;
-    auto via = INVALID_OSM_ID;
+    auto via_node = INVALID_OSM_ID;
+    std::vector<OSMWayID> via_ways;
     auto to = INVALID_OSM_ID;
     bool is_node_restriction = true;
 
@@ -152,7 +153,7 @@ RestrictionParser::TryParse(const osmium::Relation &relation) const
                 continue;
             }
             BOOST_ASSERT(0 == strcmp("via", role));
-            via = static_cast<std::uint64_t>(member.ref());
+            via_node = static_cast<std::uint64_t>(member.ref());
             is_node_restriction = true;
             // set via node id
             break;
@@ -170,7 +171,7 @@ RestrictionParser::TryParse(const osmium::Relation &relation) const
             }
             else if (0 == strcmp("via", role))
             {
-                via = static_cast<std::uint64_t>(member.ref());
+                via_ways.push_back({static_cast<std::uint64_t>(member.ref())});
                 is_node_restriction = false;
             }
             break;
@@ -211,17 +212,17 @@ RestrictionParser::TryParse(const osmium::Relation &relation) const
         }
     }
 
-    if (from != INVALID_OSM_ID && via != INVALID_OSM_ID && to != INVALID_OSM_ID)
+    if (from != INVALID_OSM_ID && (via_node != INVALID_OSM_ID || !via_ways.empty()) && to != INVALID_OSM_ID)
     {
         if (is_node_restriction)
         {
             // template struct requires bracket for ID initialisation :(
-            restriction_container.node_or_way = InputNodeRestriction{{from}, {via}, {to}};
+            restriction_container.node_or_way = InputNodeRestriction{{from}, {via_node}, {to}};
         }
         else
         {
             // template struct requires bracket for ID initialisation :(
-            restriction_container.node_or_way = InputWayRestriction{{from}, {via}, {to}};
+            restriction_container.node_or_way = InputWayRestriction{{from}, via_ways, {to}};
         }
         return restriction_container;
     }

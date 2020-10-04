@@ -262,11 +262,17 @@ void annotateTurns(const util::NodeBasedDynamicGraph &node_based_graph,
 
                                     if (is_way_restricted)
                                     {
-                                        auto const restriction = way_restriction_map.GetRestriction(
+                                        auto const restrictions = way_restriction_map.GetRestrictions(
                                             duplicated_node_id, node_at_end_of_turn);
 
-                                        if (restriction.condition.empty())
+                                        auto is_unconditional = std::any_of(
+                                            restrictions.begin(), restrictions.end(), [](const auto& r) {
+                                                return r->instructions.condition.empty();
+                                            });
+
+                                        if (is_unconditional) {
                                             continue;
+                                        }
 
                                         buffer->delayed_turn_data.push_back(guidance::TurnData{
                                             turn->instruction,

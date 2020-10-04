@@ -2,6 +2,7 @@
 #define OSRM_EXTRACTOR_RESTRICTION_INDEX_HPP_
 
 #include "extractor/restriction.hpp"
+#include "restriction_graph.hpp"
 #include "util/typedefs.hpp"
 
 #include <boost/unordered_map.hpp>
@@ -15,55 +16,56 @@ namespace extractor
 {
 
 // allows easy check for whether a node intersection is present at a given intersection
-template <typename restriction_type> class RestrictionIndex
+template <typename filter_type>
+class RestrictionIndex
 {
   public:
-    using value_type = restriction_type;
 
-    template <typename extractor_type>
-    RestrictionIndex(std::vector<restriction_type> &restrictions, extractor_type extractor);
+    RestrictionIndex(const RestrictionGraph &restrictionGraph) : restrictionGraph(restrictionGraph), filter(filter_type{}){}
 
-    bool IsIndexed(NodeID first, NodeID second) const;
-
-    auto Restrictions(NodeID first, NodeID second) const
+    std::vector<const TurnRestriction*> Restrictions(NodeID first, NodeID second) const
     {
-        return restriction_hash.equal_range(std::make_pair(first, second));
+/*
+        std::cout << "Checking " << first << ", " << second << std::endl;
+*/
+        std::vector<const TurnRestriction*> res;
+        auto edge = std::make_pair(first, second);
+        auto start_way = restrictionGraph.start_edge_to_restriction.find(edge);
+            if (start_way != restrictionGraph.start_edge_to_restriction.end()) {
+                for (const auto& restriction : restrictionGraph.start_ways[start_way->second].restrictions) {
+                    if (filter(restriction)) {
+ //                     std::cout << "result " << restriction->via_restriction.to << " , " << restriction->instructions.is_only << std::endl;
+                        res.push_back(restriction);
+                    }
+                }
+            }
+        return res;
     };
-
-    auto Size() const { return restriction_hash.size(); }
 
   private:
-    boost::unordered_multimap<std::pair<NodeID, NodeID>, restriction_type *> restriction_hash;
+    const RestrictionGraph& restrictionGraph;
+    const filter_type filter;
 };
 
-template <typename restriction_type>
-template <typename extractor_type>
-RestrictionIndex<restriction_type>::RestrictionIndex(std::vector<restriction_type> &restrictions,
-                                                     extractor_type extractor)
+struct ConditionalOnly
 {
-    // build a multi-map
-    for (auto &restriction : restrictions)
-        restriction_hash.insert(std::make_pair(extractor(restriction), &restriction));
-}
-
-template <typename restriction_type>
-bool RestrictionIndex<restriction_type>::IsIndexed(const NodeID first, const NodeID second) const
-{
-    return restriction_hash.count(std::make_pair(first, second));
-}
-
-struct IndexNodeByFromAndVia
-{
-    std::pair<NodeID, NodeID> operator()(const TurnRestriction &restriction)
+    bool operator()(const TurnRestriction *restriction) const
     {
-        const auto &node = restriction.AsNodeRestriction();
-        return std::make_pair(node.from, node.via);
+        return !restriction->instructions.condition.empty();
     };
 };
 
-// check wheter a turn is restricted within a restriction_index
+struct UnconditionalOnly
+{
+    bool operator()(const TurnRestriction *restriction) const
+    {
+        return restriction->instructions.condition.empty();
+    };
+};
+
+// check whether a turn is restricted within a restriction_index
 template <typename restriction_map_type>
-std::pair<bool, typename restriction_map_type::value_type *>
+std::pair<bool, const TurnRestriction *>
 isRestricted(const NodeID from,
              const NodeID via,
              const NodeID to,
@@ -72,28 +74,21 @@ isRestricted(const NodeID from,
     const auto range = restriction_map.Restrictions(from, via);
 
     // check if a given node_restriction is targeting node
-    const auto to_is_restricted = [to](const auto &pair) {
-        const auto &restriction = *pair.second;
-        if (restriction.Type() == RestrictionType::NODE_RESTRICTION)
-        {
-            auto const &as_node = restriction.AsNodeRestriction();
-            auto const restricted = restriction.is_only ? (to != as_node.to) : (to == as_node.to);
-
-            return restricted;
-        }
-        return false;
+    const auto to_is_restricted = [to](const auto &restriction) {
+        auto const restricted = restriction->instructions.is_only ? (to != restriction->via_restriction.to) : (to == restriction->via_restriction.to);
+        return restricted;
     };
 
-    auto itr = std::find_if(range.first, range.second, to_is_restricted);
+    auto itr = std::find_if(range.begin(), range.end(), to_is_restricted);
 
-    if (itr != range.second)
-        return {true, itr->second};
+    if (itr != range.end())
+        return std::make_pair(true, *itr);
     else
         return {false, NULL};
 }
 
-using RestrictionMap = RestrictionIndex<TurnRestriction>;
-using ConditionalRestrictionMap = RestrictionIndex<ConditionalTurnRestriction>;
+using RestrictionMap = RestrictionIndex<UnconditionalOnly>;
+using ConditionalRestrictionMap = RestrictionIndex<ConditionalOnly>;
 
 } // namespace extractor
 } // namespace osrm

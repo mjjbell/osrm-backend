@@ -116,6 +116,7 @@ ExtractionContainers::ExtractionContainers()
     name_offsets.push_back(0);
     // Insert the total length sentinel (corresponds to the next name string offset)
     name_offsets.push_back(0);
+    way_node_id_offsets.push_back(0);
 }
 
 /**
@@ -134,6 +135,9 @@ void ExtractionContainers::PrepareData(ScriptingEnvironment &scripting_environme
 {
     storage::tar::FileWriter writer(osrm_path, storage::tar::FileWriter::GenerateFingerprint);
 
+    auto restriction_ways = IdentifyRestrictionWays();
+    auto maneuver_override_ways = IdentifyManeuverOverrideWays();
+
     PrepareNodes();
     WriteNodes(writer);
     PrepareEdges(scripting_environment);
@@ -142,20 +146,8 @@ void ExtractionContainers::PrepareData(ScriptingEnvironment &scripting_environme
     WriteEdges(writer);
     WriteMetadata(writer);
 
-    /* Sort these so that searching is a bit faster later on */
-    {
-        util::UnbufferedLog log;
-        log << "Sorting used ways         ... ";
-        TIMER_START(sort_ways);
-        tbb::parallel_sort(way_start_end_id_list.begin(),
-                           way_start_end_id_list.end(),
-                           FirstAndLastSegmentOfWayCompare());
-        TIMER_STOP(sort_ways);
-        log << "ok, after " << TIMER_SEC(sort_ways) << "s";
-    }
-
-    PrepareManeuverOverrides();
-    PrepareRestrictions();
+    PrepareManeuverOverrides(maneuver_override_ways);
+    PrepareRestrictions(restriction_ways);
     WriteCharData(name_file_name);
 }
 
@@ -665,47 +657,54 @@ void ExtractionContainers::WriteNodes(storage::tar::FileWriter &writer) const
     util::Log() << "Processed " << max_internal_node_id << " nodes";
 }
 
-void ExtractionContainers::PrepareManeuverOverrides()
+ExtractionContainers::ReferencedWays ExtractionContainers::IdentifyManeuverOverrideWays()
 {
-    std::unordered_map<OSMWayID, FirstAndLastSegmentOfWay> referenced_ways;
+    ReferencedWays maneuver_override_ways;
 
     // prepare for extracting source/destination nodes for all maneuvers
-    {
-        util::UnbufferedLog log;
-        log << "Collecting start/end information on " << external_maneuver_overrides_list.size()
-            << " maneuver overrides...";
-        TIMER_START(prepare_maneuver_overrides);
+    util::UnbufferedLog log;
+    log << "Collecting start/end information on " << external_maneuver_overrides_list.size()
+        << " maneuver overrides...";
+    TIMER_START(identify_maneuver_override_ways);
 
-        const auto mark_ids = [&](auto const &external_maneuver_override) {
-            FirstAndLastSegmentOfWay dummy_segment{
-                MAX_OSM_WAYID, MAX_OSM_NODEID, MAX_OSM_NODEID, MAX_OSM_NODEID, MAX_OSM_NODEID};
-            std::for_each(external_maneuver_override.via_ways.begin(),
-                          external_maneuver_override.via_ways.end(),
-                          [&referenced_ways, dummy_segment](const auto &element) {
-                              referenced_ways[element] = dummy_segment;
-                          });
-        };
+    const auto mark_ids = [&](auto const &external_maneuver_override) {
+      NodesOfWay dummy_segment{
+          MAX_OSM_WAYID, {MAX_OSM_NODEID, MAX_OSM_NODEID}};
+      std::for_each(external_maneuver_override.via_ways.begin(),
+                    external_maneuver_override.via_ways.end(),
+                    [&maneuver_override_ways, dummy_segment](const auto &element) {
+                      maneuver_override_ways[element] = dummy_segment;
+                    });
+    };
 
-        // First, make an empty hashtable keyed by the ways referenced
-        // by the maneuver overrides
-        std::for_each(external_maneuver_overrides_list.begin(),
-                      external_maneuver_overrides_list.end(),
-                      mark_ids);
+    // First, make an empty hashtable keyed by the ways referenced
+    // by the maneuver overrides
+    std::for_each(external_maneuver_overrides_list.begin(),
+                  external_maneuver_overrides_list.end(),
+                  mark_ids);
 
-        const auto set_ids = [&](auto const &start_end) {
-            auto itr = referenced_ways.find(start_end.way_id);
-            if (itr != referenced_ways.end())
-                itr->second = start_end;
-        };
+    const auto set_ids = [&](auto const &way_id) {
+      auto itr = maneuver_override_ways.find(way_id);
+      if (itr != maneuver_override_ways.end()) {
+          auto way_idx = &way_id - &ways_list[0];
+          auto node_start_itr = used_node_id_list.begin() + way_node_id_offsets[way_idx];
+          auto node_end_itr = used_node_id_list.begin() + way_node_id_offsets[way_idx+1];
+          itr->second = NodesOfWay(way_id, std::vector<OSMNodeID>(node_start_itr, node_end_itr));
+      }
+    };
 
-        // Then, populate the values in that hashtable for only the ways
-        // referenced
-        std::for_each(way_start_end_id_list.cbegin(), way_start_end_id_list.cend(), set_ids);
+    // Then, populate the values in that hashtable for only the ways
+    // referenced
+    std::for_each(ways_list.cbegin(), ways_list.cend(), set_ids);
 
-        TIMER_STOP(prepare_maneuver_overrides);
-        log << "ok, after " << TIMER_SEC(prepare_maneuver_overrides) << "s";
-    }
+    TIMER_STOP(identify_maneuver_override_ways);
+    log << "ok, after " << TIMER_SEC(identify_maneuver_override_ways) << "s";
 
+    return maneuver_override_ways;
+}
+
+void ExtractionContainers::PrepareManeuverOverrides(ReferencedWays &maneuver_override_ways)
+{
     auto const osm_node_to_internal_nbn = [&](auto const osm_node) {
         auto internal = mapExternalToInternalNodeID(
             used_node_id_list.begin(), used_node_id_list.end(), osm_node);
@@ -742,32 +741,32 @@ void ExtractionContainers::PrepareManeuverOverrides()
      * node-based nodes that describe the turn (the node just before, the
      * node at the turn, and the next node after the turn)
      **/
-    auto const find_turn_from_way_tofrom_nodes = [&](auto const &from_segment,
+    auto const find_turn_from_way_to_from_nodes = [&](auto const &from_segment,
                                                      auto const &to_segment) {
 
-        if (from_segment.first_segment_source_id == to_segment.first_segment_source_id)
+        if (from_segment.first_segment_source_id() == to_segment.first_segment_source_id())
         {
-            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.first_segment_target_id),
-                                 osm_node_to_internal_nbn(from_segment.first_segment_source_id),
-                                 osm_node_to_internal_nbn(to_segment.first_segment_target_id)};
+            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.first_segment_target_id()),
+                                 osm_node_to_internal_nbn(from_segment.first_segment_source_id()),
+                                 osm_node_to_internal_nbn(to_segment.first_segment_target_id())};
         }
-        else if (from_segment.first_segment_source_id == to_segment.last_segment_target_id)
+        else if (from_segment.first_segment_source_id() == to_segment.last_segment_target_id())
         {
-            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.first_segment_target_id),
-                                 osm_node_to_internal_nbn(from_segment.first_segment_source_id),
-                                 osm_node_to_internal_nbn(to_segment.last_segment_source_id)};
+            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.first_segment_target_id()),
+                                 osm_node_to_internal_nbn(from_segment.first_segment_source_id()),
+                                 osm_node_to_internal_nbn(to_segment.last_segment_source_id())};
         }
-        else if (from_segment.last_segment_target_id == to_segment.first_segment_source_id)
+        else if (from_segment.last_segment_target_id() == to_segment.first_segment_source_id())
         {
-            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.last_segment_source_id),
-                                 osm_node_to_internal_nbn(from_segment.last_segment_target_id),
-                                 osm_node_to_internal_nbn(to_segment.first_segment_target_id)};
+            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.last_segment_source_id()),
+                                 osm_node_to_internal_nbn(from_segment.last_segment_target_id()),
+                                 osm_node_to_internal_nbn(to_segment.first_segment_target_id())};
         }
-        else if (from_segment.last_segment_target_id == to_segment.last_segment_target_id)
+        else if (from_segment.last_segment_target_id() == to_segment.last_segment_target_id())
         {
-            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.last_segment_source_id),
-                                 osm_node_to_internal_nbn(from_segment.last_segment_target_id),
-                                 osm_node_to_internal_nbn(to_segment.last_segment_source_id)};
+            return NodeBasedTurn{osm_node_to_internal_nbn(from_segment.last_segment_source_id()),
+                                 osm_node_to_internal_nbn(from_segment.last_segment_target_id()),
+                                 osm_node_to_internal_nbn(to_segment.last_segment_source_id())};
         }
         util::Log(logDEBUG) << "Maneuver override ways " << from_segment.way_id << " and "
                             << to_segment.way_id << " are not connected";
@@ -775,14 +774,14 @@ void ExtractionContainers::PrepareManeuverOverrides()
     };
 
     auto const get_turn_from_way_pair = [&](const OSMWayID &from_id, const OSMWayID &to_id) {
-        auto const from_segment_itr = referenced_ways.find(from_id);
+        auto const from_segment_itr = maneuver_override_ways.find(from_id);
         if (from_segment_itr->second.way_id != from_id)
         {
             util::Log(logDEBUG) << "Override references invalid way: " << from_id;
             return NodeBasedTurn{SPECIAL_NODEID, SPECIAL_NODEID, SPECIAL_NODEID};
         }
 
-        auto const to_segment_itr = referenced_ways.find(to_id);
+        auto const to_segment_itr = maneuver_override_ways.find(to_id);
         if (to_segment_itr->second.way_id != to_id)
         {
             util::Log(logDEBUG) << "Override references invalid way: " << to_id;
@@ -790,7 +789,7 @@ void ExtractionContainers::PrepareManeuverOverrides()
         }
 
         auto result =
-            find_turn_from_way_tofrom_nodes(from_segment_itr->second, to_segment_itr->second);
+            find_turn_from_way_to_from_nodes(from_segment_itr->second, to_segment_itr->second);
 
         return result;
     };
@@ -922,54 +921,63 @@ void ExtractionContainers::PrepareManeuverOverrides()
     }
 }
 
-void ExtractionContainers::PrepareRestrictions()
+ExtractionContainers::ReferencedWays ExtractionContainers::IdentifyRestrictionWays()
 {
-
     // contain the start/end nodes of each way that is part of an restriction
-    std::unordered_map<OSMWayID, FirstAndLastSegmentOfWay> referenced_ways;
+    ReferencedWays restriction_ways;
 
     // prepare for extracting source/destination nodes for all restrictions
-    {
-        util::UnbufferedLog log;
-        log << "Collecting start/end information on " << restrictions_list.size()
-            << " restrictions...";
-        TIMER_START(prepare_restrictions);
+    util::UnbufferedLog log;
+    log << "Collecting start/end information on " << restrictions_list.size()
+        << " restrictions...";
+    TIMER_START(identify_restriction_ways);
 
-        const auto mark_ids = [&](auto const &turn_restriction) {
-            FirstAndLastSegmentOfWay dummy_segment{
-                MAX_OSM_WAYID, MAX_OSM_NODEID, MAX_OSM_NODEID, MAX_OSM_NODEID, MAX_OSM_NODEID};
-            if (turn_restriction.Type() == RestrictionType::WAY_RESTRICTION)
-            {
-                const auto &way = turn_restriction.AsWayRestriction();
-                referenced_ways[way.from] = dummy_segment;
-                referenced_ways[way.to] = dummy_segment;
-                referenced_ways[way.via] = dummy_segment;
-            }
-            else
-            {
-                BOOST_ASSERT(turn_restriction.Type() == RestrictionType::NODE_RESTRICTION);
-                const auto &node = turn_restriction.AsNodeRestriction();
-                referenced_ways[node.from] = dummy_segment;
-                referenced_ways[node.to] = dummy_segment;
-            }
-        };
+    const auto mark_ids = [&](auto const &turn_restriction) {
+      NodesOfWay dummy_segment{
+          MAX_OSM_WAYID, {MAX_OSM_NODEID, MAX_OSM_NODEID}};
+      if (turn_restriction.Type() == RestrictionType::WAY_RESTRICTION)
+      {
+          const auto &way = turn_restriction.AsWayRestriction();
+          restriction_ways[way.from] = dummy_segment;
+          restriction_ways[way.to] = dummy_segment;
+          for (const auto &v : way.via) {
+              restriction_ways[v] = dummy_segment;
+          }
+      }
+      else
+      {
+          BOOST_ASSERT(turn_restriction.Type() == RestrictionType::NODE_RESTRICTION);
+          const auto &node = turn_restriction.AsNodeRestriction();
+          restriction_ways[node.from] = dummy_segment;
+          restriction_ways[node.to] = dummy_segment;
+      }
+    };
 
-        std::for_each(restrictions_list.begin(), restrictions_list.end(), mark_ids);
+    std::for_each(restrictions_list.begin(), restrictions_list.end(), mark_ids);
 
-        // enter invalid IDs into the above maps to indicate that we want to find out about
-        // start/end
-        // nodes of these ways
-        // update the values for all edges already sporting SPECIAL_NODEID
-        const auto set_ids = [&](auto const &start_end) {
-            auto itr = referenced_ways.find(start_end.way_id);
-            if (itr != referenced_ways.end())
-                itr->second = start_end;
-        };
+    // enter invalid IDs into the above maps to indicate that we want to find out about
+    // start/end
+    // nodes of these ways
+    // update the values for all edges already sporting SPECIAL_NODEID
+    const auto set_ids = [&](auto const &way_id) {
+      auto itr = restriction_ways.find(way_id);
+      if (itr != restriction_ways.end()) {
+          auto way_idx = &way_id - &ways_list[0];
+          auto node_start_offset = used_node_id_list.begin() + way_node_id_offsets[way_idx];
+          auto node_end_offset = used_node_id_list.begin() + way_node_id_offsets[way_idx+1];
+          itr->second = NodesOfWay(way_id, std::vector<OSMNodeID>(node_start_offset, node_end_offset));
+      }
+    };
 
-        std::for_each(way_start_end_id_list.cbegin(), way_start_end_id_list.cend(), set_ids);
-        TIMER_STOP(prepare_restrictions);
-        log << "ok, after " << TIMER_SEC(prepare_restrictions) << "s";
-    }
+    std::for_each(ways_list.cbegin(), ways_list.cend(), set_ids);
+    TIMER_STOP(identify_restriction_ways);
+    log << "ok, after " << TIMER_SEC(identify_restriction_ways) << "s";
+
+    return restriction_ways;
+}
+
+void ExtractionContainers::PrepareRestrictions(ReferencedWays &restriction_ways)
+{
 
     auto const to_internal = [&](auto const osm_node) {
         auto internal = mapExternalToInternalNodeID(
@@ -987,75 +995,142 @@ void ExtractionContainers::PrepareRestrictions()
     // d -- e - ????????? - f -- g or
     // h -- i - ????????? - j -- a
     // (d,e) or (j,a) as entry-segment
-    auto const find_node_restriction =
-        [&](auto const &segment, auto const &via_segment, auto const via_node) {
-            // In case of way-restrictions, via-node will be set to MAX_OSM_NODEID to signal
-            // that
-            // the node is not present.
-            // connected at the front of the segment
-            // Turn restrictions are described as a restriction between the two segments closest
-            // to
-            // the shared via-node on the from and to ways. Graph compression will later
-            // renumber
-            // the from and to internal node IDs as nodes are plucked out of the node-based
-            // graph.
-            if (via_node == MAX_OSM_NODEID || segment.first_segment_source_id == via_node)
-            {
-                if (segment.first_segment_source_id == via_segment.first_segment_source_id)
-                {
-                    return NodeRestriction{to_internal(segment.first_segment_target_id),
-                                           to_internal(segment.first_segment_source_id),
-                                           to_internal(via_segment.first_segment_target_id)};
-                }
-                else if (segment.first_segment_source_id == via_segment.last_segment_target_id)
-                {
-                    return NodeRestriction{to_internal(segment.first_segment_target_id),
-                                           to_internal(segment.first_segment_source_id),
-                                           to_internal(via_segment.last_segment_source_id)};
-                }
-            }
+    auto const find_via_restriction =
+        [&](std::vector<NodesOfWay> const &ways, const OSMNodeID via_id) {
 
-            // connected at the end of the segment
-            if (via_node == MAX_OSM_NODEID || segment.last_segment_target_id == via_node)
-            {
-                if (segment.last_segment_target_id == via_segment.first_segment_source_id)
-                {
-                    return NodeRestriction{to_internal(segment.last_segment_source_id),
-                                           to_internal(segment.last_segment_target_id),
-                                           to_internal(via_segment.first_segment_target_id)};
-                }
-                else if (segment.last_segment_target_id == via_segment.last_segment_target_id)
-                {
-                    return NodeRestriction{to_internal(segment.last_segment_source_id),
-                                           to_internal(segment.last_segment_target_id),
-                                           to_internal(via_segment.last_segment_source_id)};
-                }
-            }
+          ViaRestriction restriction;
+          OSMNodeID next_node = SPECIAL_OSM_NODEID;
 
-            // unconnected
-            util::Log(logDEBUG) << "Restriction references unconnected way: " << segment.way_id;
-            return NodeRestriction{SPECIAL_NODEID, SPECIAL_NODEID, SPECIAL_NODEID};
+          if (ways.size() == 2) {
+              if (ways[0].first_segment_source_id() == via_id)
+              {
+                  restriction.from = to_internal(ways[0].first_segment_target_id());
+                  restriction.via.push_back(to_internal(ways[0].first_segment_source_id()));
+                  if (ways[1].first_segment_source_id() == via_id) {
+                      restriction.to = to_internal(ways[1].first_segment_target_id());
+                      return restriction;
+                  } else if (ways[1].last_segment_target_id() == via_id) {
+                      restriction.to = to_internal(ways[1].last_segment_source_id());
+                      return restriction;
+                  } else {
+                      util::Log() << "Unable to connect via start and end ways: " << ways[0].way_id << " , " << ways[1].way_id;
+                      return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+                  }
+              } else if (ways[0].last_segment_target_id() == via_id) {
+                  restriction.from = to_internal(ways[0].last_segment_source_id());
+                  restriction.via.push_back(to_internal(ways[0].last_segment_target_id()));
+                  if (ways[1].first_segment_source_id() == via_id) {
+                      restriction.to = to_internal(ways[1].first_segment_target_id());
+                      return restriction;
+                  } else if (ways[1].last_segment_target_id() == via_id) {
+                      restriction.to = to_internal(ways[1].last_segment_source_id());
+                      return restriction;
+                  } else {
+                      util::Log() << "Unable to connect via start and end ways: " << ways[0].way_id << " , " << ways[1].way_id;
+                      return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+                  }
+              } else {
+                  util::Log() << "Unable to connect via start and end ways: " << ways[0].way_id << " , " << ways[1].way_id;
+                  return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+              }
+          } else {
+              // Find the orientation of the connected ways
+              // starting with the first.
+              if (ways[0].first_segment_source_id() == ways[1].first_segment_source_id()) {
+                  restriction.from = to_internal(ways[0].first_segment_target_id());
+                  for (const auto& node_id: ways[1].node_ids) {
+                      restriction.via.push_back(to_internal(node_id));
+                  }
+                  next_node = ways[1].last_segment_target_id();
+              } else if (ways[0].first_segment_source_id() == ways[1].last_segment_target_id()) {
+                  restriction.from = to_internal(ways[0].first_segment_target_id());
+                  for (auto node_id = ways[1].node_ids.rbegin(); node_id != ways[1].node_ids.rend(); node_id++) {
+                      restriction.via.push_back(to_internal(*node_id));
+                  }
+                  next_node = ways[1].first_segment_source_id();
+              } else if (ways[0].last_segment_target_id() == ways[1].first_segment_source_id()) {
+                  restriction.from = to_internal(ways[0].last_segment_source_id());
+                  for (const auto& node_id: ways[1].node_ids) {
+                      restriction.via.push_back(to_internal(node_id));
+                  }
+                  next_node = ways[1].last_segment_target_id();
+              } else if (ways[0].last_segment_target_id() == ways[1].last_segment_target_id()) {
+                  restriction.from = to_internal(ways[0].last_segment_source_id());
+                  for (auto node_id = ways[1].node_ids.rbegin(); node_id != ways[1].node_ids.rend(); node_id++) {
+                      restriction.via.push_back(to_internal(*node_id));
+                  }
+                  next_node = ways[1].first_segment_source_id();
+              } else {
+                  util::Log() << "Unable to connect start and via ways: " << ways[0].way_id << " , " << ways[1].way_id;
+                  return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+              }
+          }
+
+          for (size_t i = 2; i < ways.size()-1; ++i) {
+              if (next_node == ways[i].first_segment_source_id())
+              {
+                  for (size_t j = 1; j < ways[i].node_ids.size(); ++j) {
+                      restriction.via.push_back(to_internal(ways[i].node_ids[j]));
+                  }
+                  next_node = ways[i].last_segment_target_id();
+              } else if (next_node == ways[i].last_segment_target_id()) {
+                  for (int j = ways[i].node_ids.size() - 2; j >= 0; --j) {
+                      restriction.via.push_back(to_internal(ways[i].node_ids[j]));
+                  }
+                  next_node = ways[i].first_segment_source_id();
+              } else {
+                  util::Log() << "Unable to connect via ways: " << ways[i-1].way_id << " , " << ways[i].way_id;
+                  return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+              }
+          }
+
+          // Add the final to node.
+          if (next_node == ways[ways.size()-1].first_segment_source_id())
+          {
+              restriction.to = to_internal(ways[ways.size()-1].first_segment_target_id());
+          } else if (next_node == ways[ways.size()-1].last_segment_target_id()) {
+              restriction.to = to_internal(ways[ways.size()-1].last_segment_source_id());
+          } else {
+              util::Log() << "Unable to connect via ways: " << ways[ways.size()-1].way_id << " , " << ways[ways.size()-1].way_id;
+              return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+          }
+          return restriction;
         };
 
     // translate the turn from one segment onto another into a node restriction (the ways can
     // only
     // be connected at a single location)
-    auto const get_node_restriction_from_OSM_ids = [&](
-        auto const from_id, auto const to_id, const OSMNodeID via_node) {
-        auto const from_segment_itr = referenced_ways.find(from_id);
-        if (from_segment_itr->second.way_id != from_id)
-        {
-            util::Log(logDEBUG) << "Restriction references invalid way: " << from_id;
-            return NodeRestriction{SPECIAL_NODEID, SPECIAL_NODEID, SPECIAL_NODEID};
-        }
+    auto const get_via_restriction_from_OSM_ids = [&](
+        auto const from_id, auto const to_id, const std::vector<OSMWayID>& via_ids,
+            const OSMNodeID v_id) {
+      auto const from_segment_itr = restriction_ways.find(from_id);
+      std::vector<NodesOfWay> restricted_path_ways;
+      if (from_segment_itr->second.way_id != from_id)
+      {
+          util::Log() << "Restriction references invalid way: " << from_id;
+          return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+      }
+      restricted_path_ways.push_back(from_segment_itr->second);
 
-        auto const to_segment_itr = referenced_ways.find(to_id);
-        if (to_segment_itr->second.way_id != to_id)
-        {
-            util::Log(logDEBUG) << "Restriction references invalid way: " << to_id;
-            return NodeRestriction{SPECIAL_NODEID, SPECIAL_NODEID, SPECIAL_NODEID};
-        }
-        return find_node_restriction(from_segment_itr->second, to_segment_itr->second, via_node);
+      for (const auto& via_id : via_ids) {
+          auto const via_segment_itr = restriction_ways.find(via_id);
+          if (via_segment_itr->second.way_id != via_id)
+          {
+              util::Log() << "Restriction references invalid way: " << to_id;
+              return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+          }
+          restricted_path_ways.push_back(via_segment_itr->second);
+      }
+
+      auto const to_segment_itr = restriction_ways.find(to_id);
+      if (to_segment_itr->second.way_id != to_id)
+      {
+          util::Log() << "Restriction references invalid way: " << to_id;
+          return ViaRestriction{SPECIAL_NODEID, {SPECIAL_NODEID}, SPECIAL_NODEID};
+      }
+      restricted_path_ways.push_back(to_segment_itr->second);
+
+      return find_via_restriction(restricted_path_ways, v_id);
     };
 
     // Transform an OSMRestriction (based on WayIDs) into an OSRM restriction (base on NodeIDs).
@@ -1068,20 +1143,16 @@ void ExtractionContainers::PrepareRestrictions()
         {
             auto const &external = external_type.AsWayRestriction();
             // check if we were able to resolve all the involved ways
-            auto const from_restriction =
-                get_node_restriction_from_OSM_ids(external.from, external.via, MAX_OSM_NODEID);
-            auto const to_restriction =
-                get_node_restriction_from_OSM_ids(external.via, external.to, MAX_OSM_NODEID);
+            auto const restriction =
+                get_via_restriction_from_OSM_ids(external.from, external.to, external.via, SPECIAL_OSM_NODEID);
 
             // failed to translate either of the involved nodes?
-            if (!from_restriction.Valid() || !to_restriction.Valid())
+            if (!restriction.Valid()) {
+                util::Log() << "Restriction is invalid!";
                 return false;
+            }
 
-            // point located at both via and segment is alway on `second`, to FSSF is the order
-            // we
-            // need
-            WayRestriction way_restriction{from_restriction, to_restriction};
-            internal_type.node_or_way = std::move(way_restriction);
+            internal_type.via_restriction = restriction;
             return true;
         }
         else
@@ -1092,20 +1163,20 @@ void ExtractionContainers::PrepareRestrictions()
 
             // check if we were able to resolve all the involved ways
             auto restriction =
-                get_node_restriction_from_OSM_ids(external.from, external.to, external.via);
+                get_via_restriction_from_OSM_ids(external.from, external.to, {}, external.via);
 
             if (!restriction.Valid())
             {
                 return false;
             }
 
-            if (restriction.via != via_node)
+            if (restriction.via[0] != via_node)
             {
                 util::Log(logDEBUG) << "Restriction references invalid way: " << external.via;
                 return false;
             }
 
-            internal_type.node_or_way = std::move(restriction);
+            internal_type.via_restriction = restriction;
             return true;
         }
     };
@@ -1115,23 +1186,22 @@ void ExtractionContainers::PrepareRestrictions()
     const auto transform_into_internal_types =
         [&](const InputConditionalTurnRestriction &external_restriction) {
             // unconditional restriction
-            if (external_restriction.condition.empty() &&
-                external_restriction.Type() == RestrictionType::NODE_RESTRICTION)
+            if (external_restriction.condition.empty())
             {
                 TurnRestriction restriction;
-                restriction.is_only = external_restriction.is_only;
+                restriction.instructions.is_only = external_restriction.is_only;
                 if (transform(external_restriction, restriction))
-                    unconditional_turn_restrictions.push_back(std::move(restriction));
+                    turn_restrictions.push_back(std::move(restriction));
             }
             // conditional turn restriction
             else
             {
-                ConditionalTurnRestriction restriction;
-                restriction.is_only = external_restriction.is_only;
-                restriction.condition = std::move(external_restriction.condition);
+                TurnRestriction restriction;
+                restriction.instructions.is_only = external_restriction.is_only;
+                restriction.instructions.condition = std::move(external_restriction.condition);
                 if (transform(external_restriction, restriction))
                 {
-                    conditional_turn_restrictions.push_back(std::move(restriction));
+                    turn_restrictions.push_back(std::move(restriction));
                 }
             }
         };

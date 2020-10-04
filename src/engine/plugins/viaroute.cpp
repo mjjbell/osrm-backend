@@ -104,6 +104,15 @@ Status ViaRoutePlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithm
     };
     util::for_each_pair(snapped_phantoms, build_phantom_pairs);
 
+    for (const auto& start_end: start_end_nodes) {
+        std::cout << "Source" << std::endl;
+        std::cout << start_end.source_phantom.forward_segment_id.id << std::endl;
+        std::cout << start_end.source_phantom.reverse_segment_id.id << std::endl;
+        std::cout << "Target" << std::endl;
+        std::cout << start_end.target_phantom.forward_segment_id.id << std::endl;
+        std::cout << start_end.target_phantom.reverse_segment_id.id << std::endl;
+    }
+
     api::RouteAPI route_api{facade, route_parameters};
 
     InternalManyRoutesResult routes;

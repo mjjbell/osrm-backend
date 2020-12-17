@@ -105,7 +105,7 @@ makeWaypoint(const util::Coordinate &location, const double &distance, std::stri
 util::json::Object makeWaypoint(const util::Coordinate &location,
                                 const double &distance,
                                 std::string name,
-                                const Hint &hint);
+                                const std::vector<Hint> &hint);
 
 util::json::Object makeRouteLeg(guidance::RouteLeg leg, util::json::Array steps);
 

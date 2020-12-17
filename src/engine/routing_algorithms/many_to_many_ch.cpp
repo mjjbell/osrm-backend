@@ -49,7 +49,7 @@ void relaxOutgoingEdges(
     const DataFacade<Algorithm> &facade,
     const typename SearchEngineData<Algorithm>::ManyToManyQueryHeap::HeapNode &heapNode,
     typename SearchEngineData<Algorithm>::ManyToManyQueryHeap &query_heap,
-    const PhantomNode &)
+    const PhantomNodeCandidates &)
 {
     if (stallAtNode<DIRECTION>(facade, heapNode, query_heap))
     {
@@ -99,7 +99,7 @@ void forwardRoutingStep(const DataFacade<Algorithm> &facade,
                         std::vector<EdgeDuration> &durations_table,
                         std::vector<EdgeDistance> &distances_table,
                         std::vector<NodeID> &middle_nodes_table,
-                        const PhantomNode &phantom_node)
+                        const PhantomNodeCandidates &phantom_node)
 {
     // Take a copy of the extracted node because otherwise could be modified later if toHeapNode is
     // the same
@@ -158,7 +158,7 @@ void backwardRoutingStep(const DataFacade<Algorithm> &facade,
                          const unsigned column_index,
                          typename SearchEngineData<Algorithm>::ManyToManyQueryHeap &query_heap,
                          std::vector<NodeBucket> &search_space_with_buckets,
-                         const PhantomNode &phantom_node)
+                         const PhantomNodeCandidates &phantom_node)
 {
     // Take a copy (no ref &) of the extracted node because otherwise could be modified later if
     // toHeapNode is the same
@@ -181,7 +181,7 @@ template <>
 std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
 manyToManySearch(SearchEngineData<ch::Algorithm> &engine_working_data,
                  const DataFacade<ch::Algorithm> &facade,
-                 const std::vector<PhantomNode> &phantom_nodes,
+                 const std::vector<PhantomNodeCandidates> &phantom_nodes,
                  const std::vector<std::size_t> &source_indices,
                  const std::vector<std::size_t> &target_indices,
                  const bool calculate_distance)

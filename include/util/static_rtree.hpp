@@ -603,7 +603,7 @@ class StaticRTree
             }
             else
             { // current candidate is an actual road segment
-                // We deliberatly make a copy here, we mutate the value below
+                // We deliberately make a copy here, we mutate the value below
                 auto edge_data = m_objects[current_query_node.segment_index];
                 const auto &current_candidate =
                     CandidateSegment{current_query_node.fixed_projected_coordinate, edge_data};
@@ -676,7 +676,7 @@ class StaticRTree
      * Iterates over all the children of a TreeNode and inserts them into the search
      * priority queue using their distance from the search coordinate as the
      * priority metric.
-     * The closests distance to a box from our point is also the closest distance
+     * The closest distance to a box from our point is also the closest distance
      * to the closest line in that box (assuming the boxes hug their contents).
      */
     template <class QueueT>

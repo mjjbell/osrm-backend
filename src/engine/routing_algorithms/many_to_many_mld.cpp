@@ -25,7 +25,7 @@ using PackedPath = std::vector<PackedEdge>;
 template <typename MultiLevelPartition>
 inline LevelID getNodeQueryLevel(const MultiLevelPartition &partition,
                                  const NodeID node,
-                                 const PhantomNode &phantom_node,
+                                 const PhantomNodeCandidates &phantom_node,
                                  const LevelID maximal_level)
 {
     const auto node_level = getNodeQueryLevel(partition, node, phantom_node);
@@ -214,7 +214,7 @@ template <bool DIRECTION>
 std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
 oneToManySearch(SearchEngineData<Algorithm> &engine_working_data,
                 const DataFacade<Algorithm> &facade,
-                const std::vector<PhantomNode> &phantom_nodes,
+                const std::vector<PhantomNodeCandidates> &phantom_nodes,
                 std::size_t phantom_index,
                 const std::vector<std::size_t> &phantom_indices,
                 const bool calculate_distance)
@@ -231,42 +231,45 @@ oneToManySearch(SearchEngineData<Algorithm> &engine_working_data,
     target_nodes_index.reserve(phantom_indices.size());
     for (std::size_t index = 0; index < phantom_indices.size(); ++index)
     {
-        const auto &phantom_index = phantom_indices[index];
-        const auto &phantom_node = phantom_nodes[phantom_index];
+        const auto &candidates = phantom_nodes[phantom_indices[index]];
 
-        if (DIRECTION == FORWARD_DIRECTION)
-        {
-            if (phantom_node.IsValidForwardTarget())
-                target_nodes_index.insert(
-                    {phantom_node.forward_segment_id.id,
-                     std::make_tuple(index,
-                                     phantom_node.GetForwardWeightPlusOffset(),
-                                     phantom_node.GetForwardDuration(),
-                                     phantom_node.GetForwardDistance())});
-            if (phantom_node.IsValidReverseTarget())
-                target_nodes_index.insert(
-                    {phantom_node.reverse_segment_id.id,
-                     std::make_tuple(index,
-                                     phantom_node.GetReverseWeightPlusOffset(),
-                                     phantom_node.GetReverseDuration(),
-                                     phantom_node.GetReverseDistance())});
-        }
-        else if (DIRECTION == REVERSE_DIRECTION)
-        {
-            if (phantom_node.IsValidForwardSource())
-                target_nodes_index.insert(
-                    {phantom_node.forward_segment_id.id,
-                     std::make_tuple(index,
-                                     -phantom_node.GetForwardWeightPlusOffset(),
-                                     -phantom_node.GetForwardDuration(),
-                                     -phantom_node.GetForwardDistance())});
-            if (phantom_node.IsValidReverseSource())
-                target_nodes_index.insert(
-                    {phantom_node.reverse_segment_id.id,
-                     std::make_tuple(index,
-                                     -phantom_node.GetReverseWeightPlusOffset(),
-                                     -phantom_node.GetReverseDuration(),
-                                     -phantom_node.GetReverseDistance())});
+        for (const auto &phantom_node : candidates) {
+            if (DIRECTION == FORWARD_DIRECTION)
+            {
+                if (phantom_node.IsValidForwardTarget())
+                    target_nodes_index.insert(
+                        {phantom_node.forward_segment_id.id,
+                         std::make_tuple(index,
+                                         phantom_node.GetForwardWeightPlusOffset(),
+                                         phantom_node.GetForwardDuration(),
+                                         phantom_node.GetForwardDistance())});
+
+                if (phantom_node.IsValidReverseTarget())
+                    target_nodes_index.insert(
+                        {phantom_node.reverse_segment_id.id,
+                         std::make_tuple(index,
+                                         phantom_node.GetReverseWeightPlusOffset(),
+                                         phantom_node.GetReverseDuration(),
+                                         phantom_node.GetReverseDistance())});
+            }
+            else if (DIRECTION == REVERSE_DIRECTION)
+            {
+                if (phantom_node.IsValidForwardSource())
+                    target_nodes_index.insert(
+                        {phantom_node.forward_segment_id.id,
+                         std::make_tuple(index,
+                                         -phantom_node.GetForwardWeightPlusOffset(),
+                                         -phantom_node.GetForwardDuration(),
+                                         -phantom_node.GetForwardDistance())});
+
+                if (phantom_node.IsValidReverseSource())
+                    target_nodes_index.insert(
+                        {phantom_node.reverse_segment_id.id,
+                         std::make_tuple(index,
+                                         -phantom_node.GetReverseWeightPlusOffset(),
+                                         -phantom_node.GetReverseDuration(),
+                                         -phantom_node.GetReverseDistance())});
+            }
         }
     }
 
@@ -337,42 +340,44 @@ oneToManySearch(SearchEngineData<Algorithm> &engine_working_data,
     };
 
     { // Place source (destination) adjacent nodes into the heap
-        const auto &phantom_node = phantom_nodes[phantom_index];
+        const auto &candidates = phantom_nodes[phantom_indices[phantom_index]];
 
-        if (DIRECTION == FORWARD_DIRECTION)
-        {
-            if (phantom_node.IsValidForwardSource())
+        for (const auto &phantom_node : candidates) {
+            if (DIRECTION == FORWARD_DIRECTION)
             {
-                insert_node(phantom_node.forward_segment_id.id,
-                            -phantom_node.GetForwardWeightPlusOffset(),
-                            -phantom_node.GetForwardDuration(),
-                            -phantom_node.GetForwardDistance());
-            }
+                if (phantom_node.IsValidForwardSource())
+                {
+                    insert_node(phantom_node.forward_segment_id.id,
+                                -phantom_node.GetForwardWeightPlusOffset(),
+                                -phantom_node.GetForwardDuration(),
+                                -phantom_node.GetForwardDistance());
+                }
 
-            if (phantom_node.IsValidReverseSource())
-            {
-                insert_node(phantom_node.reverse_segment_id.id,
-                            -phantom_node.GetReverseWeightPlusOffset(),
-                            -phantom_node.GetReverseDuration(),
-                            -phantom_node.GetReverseDistance());
+                if (phantom_node.IsValidReverseSource())
+                {
+                    insert_node(phantom_node.reverse_segment_id.id,
+                                -phantom_node.GetReverseWeightPlusOffset(),
+                                -phantom_node.GetReverseDuration(),
+                                -phantom_node.GetReverseDistance());
+                }
             }
-        }
-        else if (DIRECTION == REVERSE_DIRECTION)
-        {
-            if (phantom_node.IsValidForwardTarget())
+            else if (DIRECTION == REVERSE_DIRECTION)
             {
-                insert_node(phantom_node.forward_segment_id.id,
-                            phantom_node.GetForwardWeightPlusOffset(),
-                            phantom_node.GetForwardDuration(),
-                            phantom_node.GetForwardDistance());
-            }
+                if (phantom_node.IsValidForwardTarget())
+                {
+                    insert_node(phantom_node.forward_segment_id.id,
+                                phantom_node.GetForwardWeightPlusOffset(),
+                                phantom_node.GetForwardDuration(),
+                                phantom_node.GetForwardDistance());
+                }
 
-            if (phantom_node.IsValidReverseTarget())
-            {
-                insert_node(phantom_node.reverse_segment_id.id,
-                            phantom_node.GetReverseWeightPlusOffset(),
-                            phantom_node.GetReverseDuration(),
-                            phantom_node.GetReverseDistance());
+                if (phantom_node.IsValidReverseTarget())
+                {
+                    insert_node(phantom_node.reverse_segment_id.id,
+                                phantom_node.GetReverseWeightPlusOffset(),
+                                phantom_node.GetReverseDuration(),
+                                phantom_node.GetReverseDistance());
+                }
             }
         }
     }
@@ -409,7 +414,7 @@ void forwardRoutingStep(const DataFacade<Algorithm> &facade,
                         std::vector<EdgeDuration> &durations_table,
                         std::vector<EdgeDistance> &distances_table,
                         std::vector<NodeID> &middle_nodes_table,
-                        const PhantomNode &phantom_node)
+                        const PhantomNodeCandidates &phantom_node)
 {
     // Take a copy of the extracted node because otherwise could be modified later if toHeapNode is
     // the same
@@ -463,7 +468,7 @@ void backwardRoutingStep(const DataFacade<Algorithm> &facade,
                          const unsigned column_idx,
                          typename SearchEngineData<Algorithm>::ManyToManyQueryHeap &query_heap,
                          std::vector<NodeBucket> &search_space_with_buckets,
-                         const PhantomNode &phantom_node)
+                         const PhantomNodeCandidates &phantom_node)
 {
     // Take a copy of the extracted node because otherwise could be modified later if toHeapNode is
     // the same
@@ -524,7 +529,7 @@ template <bool DIRECTION>
 std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
 manyToManySearch(SearchEngineData<Algorithm> &engine_working_data,
                  const DataFacade<Algorithm> &facade,
-                 const std::vector<PhantomNode> &phantom_nodes,
+                 const std::vector<PhantomNodeCandidates> &phantom_nodes,
                  const std::vector<std::size_t> &source_indices,
                  const std::vector<std::size_t> &target_indices,
                  const bool calculate_distance)
@@ -622,7 +627,7 @@ template <>
 std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
 manyToManySearch(SearchEngineData<mld::Algorithm> &engine_working_data,
                  const DataFacade<mld::Algorithm> &facade,
-                 const std::vector<PhantomNode> &phantom_nodes,
+                 const std::vector<PhantomNodeCandidates> &phantom_nodes,
                  const std::vector<std::size_t> &source_indices,
                  const std::vector<std::size_t> &target_indices,
                  const bool calculate_distance)

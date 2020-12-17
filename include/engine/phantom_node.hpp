@@ -28,6 +28,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef OSRM_ENGINE_PHANTOM_NODES_H
 #define OSRM_ENGINE_PHANTOM_NODES_H
 
+#include <vector>
+
 #include "extractor/travel_mode.hpp"
 
 #include "util/bearing.hpp"
@@ -35,6 +37,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "util/typedefs.hpp"
 
 #include <boost/assert.hpp>
+#include <boost/optional.hpp>
 
 namespace osrm
 {
@@ -223,12 +226,19 @@ struct PhantomNode
 
 static_assert(sizeof(PhantomNode) == 80, "PhantomNode has more padding then expected");
 
-using PhantomNodePair = std::pair<PhantomNode, PhantomNode>;
+using PhantomNodeCandidates = std::vector<PhantomNode>;
+using PhantomNodePair = std::pair<PhantomNodeCandidates, PhantomNodeCandidates>;
 
 struct PhantomNodeWithDistance
 {
     PhantomNode phantom_node;
     double distance;
+};
+
+struct PhantomEndpointCandidates
+{
+    PhantomNodeCandidates source_phantoms;
+    PhantomNodeCandidates target_phantoms;
 };
 
 struct PhantomNodes

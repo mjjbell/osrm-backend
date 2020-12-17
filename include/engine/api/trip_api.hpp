@@ -26,7 +26,7 @@ class TripAPI final : public RouteAPI
     }
     void MakeResponse(const std::vector<std::vector<NodeID>> &sub_trips,
                       const std::vector<InternalRouteResult> &sub_routes,
-                      const std::vector<PhantomNode> &phantoms,
+                      const std::vector<PhantomNodeCandidates> &phantoms,
                       osrm::engine::api::ResultT &response) const
     {
         BOOST_ASSERT(sub_trips.size() == sub_routes.size());
@@ -44,7 +44,7 @@ class TripAPI final : public RouteAPI
     }
     void MakeResponse(const std::vector<std::vector<NodeID>> &sub_trips,
                       const std::vector<InternalRouteResult> &sub_routes,
-                      const std::vector<PhantomNode> &phantoms,
+                      const std::vector<PhantomNodeCandidates> &phantoms,
                       flatbuffers::FlatBufferBuilder &fb_result) const
     {
         auto data_timestamp = facade.GetTimestamp();
@@ -67,7 +67,7 @@ class TripAPI final : public RouteAPI
     }
     void MakeResponse(const std::vector<std::vector<NodeID>> &sub_trips,
                       const std::vector<InternalRouteResult> &sub_routes,
-                      const std::vector<PhantomNode> &phantoms,
+                      const std::vector<PhantomNodeCandidates> &phantoms,
                       util::json::Object &response) const
     {
         auto number_of_routes = sub_trips.size();
@@ -115,7 +115,7 @@ class TripAPI final : public RouteAPI
     flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<fbresult::Waypoint>>>
     MakeWaypoints(flatbuffers::FlatBufferBuilder &fb_result,
                   const std::vector<std::vector<NodeID>> &sub_trips,
-                  const std::vector<PhantomNode> &phantoms) const
+                  const std::vector<PhantomNodeCandidates> &phantoms) const
     {
         std::vector<flatbuffers::Offset<fbresult::Waypoint>> waypoints;
         waypoints.reserve(parameters.coordinates.size());
@@ -137,7 +137,7 @@ class TripAPI final : public RouteAPI
     }
 
     util::json::Array MakeWaypoints(const std::vector<std::vector<NodeID>> &sub_trips,
-                                    const std::vector<PhantomNode> &phantoms) const
+                                    const std::vector<PhantomNodeCandidates> &phantoms) const
     {
         util::json::Array waypoints;
         waypoints.values.reserve(parameters.coordinates.size());

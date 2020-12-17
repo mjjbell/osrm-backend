@@ -47,7 +47,7 @@ namespace datafacade
 class BaseDataFacade;
 }
 
-// Is returned as a temporary identifier for snapped coodinates
+// Is returned as a temporary identifier for snapped coordinates
 struct Hint
 {
     PhantomNode phantom;
@@ -67,6 +67,12 @@ static_assert(sizeof(Hint) == 80 + 4, "Hint is bigger than expected");
 constexpr std::size_t ENCODED_HINT_SIZE = 112;
 static_assert(ENCODED_HINT_SIZE / 4 * 3 >= sizeof(Hint),
               "ENCODED_HINT_SIZE does not match size of Hint");
+
+
+std::string ToBase64(const std::vector<Hint> &hints);
+
+bool AreValidHints(const std::vector<Hint> &hints, const util::Coordinate new_input_coordinates, const datafacade::BaseDataFacade &facade);
+
 } // namespace engine
 } // namespace osrm
 

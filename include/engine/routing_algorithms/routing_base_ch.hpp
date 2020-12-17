@@ -120,8 +120,8 @@ void routingStep(const DataFacade<Algorithm> &facade,
                  NodeID &middle_node_id,
                  EdgeWeight &upper_bound,
                  EdgeWeight min_edge_offset,
-                 const bool force_loop_forward,
-                 const bool force_loop_reverse)
+                 const boost::optional<NodeID> &force_loop_forward_node,
+                 const boost::optional<NodeID> &force_loop_reverse_node)
 {
     auto heapNode = forward_heap.DeleteMinGetHeapNode();
     const auto reverseHeapNode = reverse_heap.GetHeapNodeIfWasInserted(heapNode.node);
@@ -132,8 +132,8 @@ void routingStep(const DataFacade<Algorithm> &facade,
         if (new_weight < upper_bound)
         {
             // if loops are forced, they are so at the source
-            if ((force_loop_forward && heapNode.data.parent == heapNode.node) ||
-                (force_loop_reverse && reverseHeapNode->data.parent == heapNode.node) ||
+            if ((force_loop_forward_node && heapNode.node == *force_loop_forward_node && heapNode.data.parent == heapNode.node) ||
+                (force_loop_reverse_node && heapNode.node == *force_loop_reverse_node && reverseHeapNode->data.parent == heapNode.node) ||
                 // in this case we are looking at a bi-directional way where the source
                 // and target phantom are on the same edge based node
                 new_weight < 0)
@@ -469,9 +469,9 @@ void search(SearchEngineData<Algorithm> &engine_working_data,
             SearchEngineData<Algorithm>::QueryHeap &reverse_heap,
             std::int32_t &weight,
             std::vector<NodeID> &packed_leg,
-            const bool force_loop_forward,
-            const bool force_loop_reverse,
-            const PhantomNodes &phantom_nodes,
+            const boost::optional<NodeID> &force_loop_forward_node,
+            const boost::optional<NodeID> &force_loop_reverse_node,
+            const PhantomEndpointCandidates &endpoint_candidates,
             const int duration_upper_bound = INVALID_EDGE_WEIGHT);
 
 // Requires the heaps for be empty

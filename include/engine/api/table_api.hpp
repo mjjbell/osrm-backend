@@ -48,7 +48,7 @@ class TableAPI final : public BaseAPI
 
     virtual void
     MakeResponse(const std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>> &tables,
-                 const std::vector<PhantomNode> &phantoms,
+                 const std::vector<PhantomNodeCandidates> &phantoms,
                  const std::vector<TableCellRef> &fallback_speed_cells,
                  osrm::engine::api::ResultT &response) const
     {
@@ -66,7 +66,7 @@ class TableAPI final : public BaseAPI
 
     virtual void
     MakeResponse(const std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>> &tables,
-                 const std::vector<PhantomNode> &phantoms,
+                 const std::vector<PhantomNodeCandidates> &phantoms,
                  const std::vector<TableCellRef> &fallback_speed_cells,
                  flatbuffers::FlatBufferBuilder &fb_result) const
     {
@@ -168,7 +168,7 @@ class TableAPI final : public BaseAPI
 
     virtual void
     MakeResponse(const std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>> &tables,
-                 const std::vector<PhantomNode> &phantoms,
+                 const std::vector<PhantomNodeCandidates> &phantoms,
                  const std::vector<TableCellRef> &fallback_speed_cells,
                  util::json::Object &response) const
     {
@@ -231,14 +231,14 @@ class TableAPI final : public BaseAPI
   protected:
     virtual flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<fbresult::Waypoint>>>
     MakeWaypoints(flatbuffers::FlatBufferBuilder &builder,
-                  const std::vector<PhantomNode> &phantoms) const
+                  const std::vector<PhantomNodeCandidates> &phantoms) const
     {
         std::vector<flatbuffers::Offset<fbresult::Waypoint>> waypoints;
         waypoints.reserve(phantoms.size());
         BOOST_ASSERT(phantoms.size() == parameters.coordinates.size());
 
         boost::range::transform(
-            phantoms, std::back_inserter(waypoints), [this, &builder](const PhantomNode &phantom) {
+            phantoms, std::back_inserter(waypoints), [this, &builder](const PhantomNodeCandidates &phantom) {
                 return BaseAPI::MakeWaypoint(&builder, phantom)->Finish();
             });
         return builder.CreateVector(waypoints);
@@ -246,7 +246,7 @@ class TableAPI final : public BaseAPI
 
     virtual flatbuffers::Offset<flatbuffers::Vector<flatbuffers::Offset<fbresult::Waypoint>>>
     MakeWaypoints(flatbuffers::FlatBufferBuilder &builder,
-                  const std::vector<PhantomNode> &phantoms,
+                  const std::vector<PhantomNodeCandidates> &phantoms,
                   const std::vector<std::size_t> &indices) const
     {
         std::vector<flatbuffers::Offset<fbresult::Waypoint>> waypoints;
@@ -308,7 +308,7 @@ class TableAPI final : public BaseAPI
         return builder.CreateVector(fb_table);
     }
 
-    virtual util::json::Array MakeWaypoints(const std::vector<PhantomNode> &phantoms) const
+    virtual util::json::Array MakeWaypoints(const std::vector<PhantomNodeCandidates> &phantoms) const
     {
         util::json::Array json_waypoints;
         json_waypoints.values.reserve(phantoms.size());
@@ -317,11 +317,11 @@ class TableAPI final : public BaseAPI
         boost::range::transform(
             phantoms,
             std::back_inserter(json_waypoints.values),
-            [this](const PhantomNode &phantom) { return BaseAPI::MakeWaypoint(phantom); });
+            [this](const PhantomNodeCandidates &phantom) { return BaseAPI::MakeWaypoint(phantom); });
         return json_waypoints;
     }
 
-    virtual util::json::Array MakeWaypoints(const std::vector<PhantomNode> &phantoms,
+    virtual util::json::Array MakeWaypoints(const std::vector<PhantomNodeCandidates> &phantoms,
                                             const std::vector<std::size_t> &indices) const
     {
         util::json::Array json_waypoints;

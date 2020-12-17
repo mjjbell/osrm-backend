@@ -7,30 +7,30 @@ namespace engine
 namespace routing_algorithms
 {
 
-bool needsLoopForward(const PhantomNode &source_phantom, const PhantomNode &target_phantom)
+boost::optional<NodeID> getForwardLoopNode(const std::vector<PhantomNode> &source_phantoms, const PhantomNode &target_phantom)
 {
-    return source_phantom.IsValidForwardSource() && target_phantom.IsValidForwardTarget() &&
-           source_phantom.forward_segment_id.id == target_phantom.forward_segment_id.id &&
-           source_phantom.GetForwardWeightPlusOffset() >
-               target_phantom.GetForwardWeightPlusOffset();
+    auto node_it = std::find_if(source_phantoms.begin(), source_phantoms.end(), [&] (const PhantomNode& phantom_node) {
+        return phantom_node.IsValidForwardSource() && target_phantom.IsValidForwardTarget() &&
+               phantom_node.forward_segment_id.id == target_phantom.forward_segment_id.id &&
+               phantom_node.GetForwardWeightPlusOffset() > target_phantom.GetForwardWeightPlusOffset();
+    });
+    if (node_it != source_phantoms.end()) {
+        return node_it->forward_segment_id.id;
+    }
+    return boost::none;
 }
 
-bool needsLoopBackwards(const PhantomNode &source_phantom, const PhantomNode &target_phantom)
+boost::optional<NodeID> getBackwardLoopNode(const std::vector<PhantomNode> &source_phantoms, const PhantomNode &target_phantom)
 {
-    return source_phantom.IsValidReverseSource() && target_phantom.IsValidReverseTarget() &&
-           source_phantom.reverse_segment_id.id == target_phantom.reverse_segment_id.id &&
-           source_phantom.GetReverseWeightPlusOffset() >
-               target_phantom.GetReverseWeightPlusOffset();
-}
-
-bool needsLoopForward(const PhantomNodes &phantoms)
-{
-    return needsLoopForward(phantoms.source_phantom, phantoms.target_phantom);
-}
-
-bool needsLoopBackwards(const PhantomNodes &phantoms)
-{
-    return needsLoopBackwards(phantoms.source_phantom, phantoms.target_phantom);
+    auto node_it = std::find_if(source_phantoms.begin(), source_phantoms.end(), [&] (const PhantomNode& phantom_node) {
+      return phantom_node.IsValidReverseSource() && target_phantom.IsValidReverseTarget() &&
+             phantom_node.reverse_segment_id.id == target_phantom.reverse_segment_id.id &&
+             phantom_node.GetReverseWeightPlusOffset() > target_phantom.GetReverseWeightPlusOffset();
+    });
+    if (node_it != source_phantoms.end()) {
+        return node_it->reverse_segment_id.id;
+    }
+    return boost::none;
 }
 
 } // namespace routing_algorithms

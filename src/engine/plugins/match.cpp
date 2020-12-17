@@ -284,8 +284,12 @@ Status MatchPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
         // force uturns to be on
         // we split the phantom nodes anyway and only have bi-directional phantom nodes for
         // possible uturns
+        std::vector<PhantomEndpointCandidates> via_endpoints;
+        std::for_each(sub_routes[index].segment_end_coordinates.begin(), sub_routes[index].segment_end_coordinates.end(), [&](const PhantomNodes &phantom_nodes) {
+            via_endpoints.push_back({{{phantom_nodes.source_phantom}},{{phantom_nodes.target_phantom}}});
+        });
         sub_routes[index] =
-            algorithms.ShortestPathSearch(sub_routes[index].segment_end_coordinates, {false});
+            algorithms.ShortestPathSearch(via_endpoints, {false});
         BOOST_ASSERT(sub_routes[index].shortest_path_weight != INVALID_EDGE_WEIGHT);
         if (collapse_legs)
         {

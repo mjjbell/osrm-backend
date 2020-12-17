@@ -16,7 +16,7 @@ namespace routing_algorithms
 namespace
 {
 
-const static constexpr bool DO_NOT_FORCE_LOOP = false;
+// const static constexpr bool DO_NOT_FORCE_LOOP = false;
 
 // allows a uturn at the target_phantom
 // searches source forward/reverse -> target forward/reverse
@@ -25,30 +25,35 @@ void searchWithUTurn(SearchEngineData<Algorithm> &engine_working_data,
                      const DataFacade<Algorithm> &facade,
                      typename SearchEngineData<Algorithm>::QueryHeap &forward_heap,
                      typename SearchEngineData<Algorithm>::QueryHeap &reverse_heap,
-                     const bool search_from_forward_node,
-                     const bool search_from_reverse_node,
+                     const std::vector<bool> &search_from_forward_node,
+                     const std::vector<bool> &search_from_reverse_node,
                      const bool search_to_forward_node,
                      const bool search_to_reverse_node,
-                     const PhantomNode &source_phantom,
+                     const PhantomNodeCandidates &source_candidates,
                      const PhantomNode &target_phantom,
-                     const int total_weight_to_forward,
-                     const int total_weight_to_reverse,
-                     int &new_total_weight,
+                     const std::vector<EdgeWeight> &total_weight_to_forward,
+                     const std::vector<EdgeWeight> &total_weight_to_reverse,
+                     EdgeWeight &new_total_weight,
                      std::vector<NodeID> &leg_packed_path)
 {
     forward_heap.Clear();
     reverse_heap.Clear();
-    if (search_from_forward_node)
-    {
-        forward_heap.Insert(source_phantom.forward_segment_id.id,
-                            -source_phantom.GetForwardWeightPlusOffset(),
-                            source_phantom.forward_segment_id.id);
-    }
-    if (search_from_reverse_node)
-    {
-        forward_heap.Insert(source_phantom.reverse_segment_id.id,
-                            -source_phantom.GetReverseWeightPlusOffset(),
-                            source_phantom.reverse_segment_id.id);
+    for (size_t i = 0; i < source_candidates.size(); ++i) {
+        const auto& candidate = source_candidates[i];
+        if (search_from_forward_node[i] && candidate.IsValidForwardSource())
+        {
+            forward_heap.Insert(candidate.forward_segment_id.id,
+                                std::min(total_weight_to_forward[i], total_weight_to_reverse[i]) -
+                                    candidate.GetForwardWeightPlusOffset(),
+                                candidate.forward_segment_id.id);
+        }
+
+        if (search_from_reverse_node[i] && candidate.IsValidReverseSource()) {
+            forward_heap.Insert(candidate.reverse_segment_id.id,
+                                std::min(total_weight_to_forward[i],total_weight_to_reverse[i]) -
+                                candidate.GetReverseWeightPlusOffset(),
+                                candidate.reverse_segment_id.id);
+        }
     }
     if (search_to_forward_node)
     {
@@ -63,29 +68,15 @@ void searchWithUTurn(SearchEngineData<Algorithm> &engine_working_data,
                             target_phantom.reverse_segment_id.id);
     }
 
-    // this is only relevent if source and target are on the same compressed edge
-    auto is_oneway_source = !(search_from_forward_node && search_from_reverse_node);
-    auto is_oneway_target = !(search_to_forward_node && search_to_reverse_node);
-    // we only enable loops here if we can't search from forward to backward node
-    auto needs_loop_forwards = is_oneway_source && needsLoopForward(source_phantom, target_phantom);
-    auto needs_loop_backwards =
-        is_oneway_target && needsLoopBackwards(source_phantom, target_phantom);
-
     search(engine_working_data,
            facade,
            forward_heap,
            reverse_heap,
            new_total_weight,
            leg_packed_path,
-           needs_loop_forwards,
-           needs_loop_backwards,
-           {source_phantom, target_phantom});
-
-    // if no route is found between two parts of the via-route, the entire route becomes
-    // invalid. Adding to invalid edge weight sadly doesn't return an invalid edge weight. Here
-    // we prevent the possible overflow, faking the addition of infinity + x == infinity
-    if (new_total_weight != INVALID_EDGE_WEIGHT)
-        new_total_weight += std::min(total_weight_to_forward, total_weight_to_reverse);
+           getForwardLoopNode(source_candidates, target_phantom),
+           getBackwardLoopNode(source_candidates, target_phantom),
+           {source_candidates, {target_phantom}});
 }
 
 // searches shortest path between:
@@ -96,14 +87,14 @@ void search(SearchEngineData<Algorithm> &engine_working_data,
             const DataFacade<Algorithm> &facade,
             typename SearchEngineData<Algorithm>::QueryHeap &forward_heap,
             typename SearchEngineData<Algorithm>::QueryHeap &reverse_heap,
-            const bool search_from_forward_node,
-            const bool search_from_reverse_node,
+            const std::vector<bool> &search_from_forward_node,
+            const std::vector<bool> &search_from_reverse_node,
             const bool search_to_forward_node,
             const bool search_to_reverse_node,
-            const PhantomNode &source_phantom,
+            const std::vector<PhantomNode> &source_candidates,
             const PhantomNode &target_phantom,
-            const int total_weight_to_forward,
-            const int total_weight_to_reverse,
+            const std::vector<EdgeWeight> &total_weight_to_forward,
+            const std::vector<EdgeWeight> &total_weight_to_reverse,
             int &new_total_weight_to_forward,
             int &new_total_weight_to_reverse,
             std::vector<NodeID> &leg_packed_path_forward,
@@ -117,19 +108,20 @@ void search(SearchEngineData<Algorithm> &engine_working_data,
                             target_phantom.GetForwardWeightPlusOffset(),
                             target_phantom.forward_segment_id.id);
 
-        if (search_from_forward_node)
-        {
-            forward_heap.Insert(source_phantom.forward_segment_id.id,
-                                total_weight_to_forward -
-                                    source_phantom.GetForwardWeightPlusOffset(),
-                                source_phantom.forward_segment_id.id);
-        }
-        if (search_from_reverse_node)
-        {
-            forward_heap.Insert(source_phantom.reverse_segment_id.id,
-                                total_weight_to_reverse -
-                                    source_phantom.GetReverseWeightPlusOffset(),
-                                source_phantom.reverse_segment_id.id);
+        for (size_t i = 0; i < source_candidates.size(); ++i) {
+            const auto &candidate = source_candidates[i];
+            if (search_from_forward_node[i] && candidate.IsValidForwardSource())
+            {
+                forward_heap.Insert(candidate.forward_segment_id.id,
+                                    total_weight_to_forward[i] - candidate.GetForwardWeightPlusOffset(),
+                                    candidate.forward_segment_id.id);
+            }
+
+            if (search_from_reverse_node[i] && candidate.IsValidReverseSource()) {
+                forward_heap.Insert(candidate.reverse_segment_id.id,
+                                    total_weight_to_reverse[i] - candidate.GetReverseWeightPlusOffset(),
+                                    candidate.reverse_segment_id.id);
+            }
         }
 
         search(engine_working_data,
@@ -138,9 +130,9 @@ void search(SearchEngineData<Algorithm> &engine_working_data,
                reverse_heap,
                new_total_weight_to_forward,
                leg_packed_path_forward,
-               needsLoopForward(source_phantom, target_phantom),
-               routing_algorithms::DO_NOT_FORCE_LOOP,
-               {source_phantom, target_phantom});
+               getForwardLoopNode(source_candidates, target_phantom),
+               boost::none,
+               {source_candidates, {target_phantom}});
     }
 
     if (search_to_reverse_node)
@@ -150,19 +142,20 @@ void search(SearchEngineData<Algorithm> &engine_working_data,
         reverse_heap.Insert(target_phantom.reverse_segment_id.id,
                             target_phantom.GetReverseWeightPlusOffset(),
                             target_phantom.reverse_segment_id.id);
-        if (search_from_forward_node)
-        {
-            forward_heap.Insert(source_phantom.forward_segment_id.id,
-                                total_weight_to_forward -
-                                    source_phantom.GetForwardWeightPlusOffset(),
-                                source_phantom.forward_segment_id.id);
-        }
-        if (search_from_reverse_node)
-        {
-            forward_heap.Insert(source_phantom.reverse_segment_id.id,
-                                total_weight_to_reverse -
-                                    source_phantom.GetReverseWeightPlusOffset(),
-                                source_phantom.reverse_segment_id.id);
+
+        for (size_t i = 0; i < source_candidates.size(); ++i) {
+            const auto &candidate = source_candidates[i];
+            if (search_from_forward_node[i] && candidate.IsValidForwardSource()) {
+                forward_heap.Insert(candidate.forward_segment_id.id,
+                                    total_weight_to_forward[i] - candidate.GetForwardWeightPlusOffset(),
+                                    candidate.forward_segment_id.id);
+            }
+
+            if (search_from_reverse_node[i] && candidate.IsValidReverseSource()) {
+                forward_heap.Insert(candidate.reverse_segment_id.id,
+                                    total_weight_to_reverse[i] - candidate.GetReverseWeightPlusOffset(),
+                                    candidate.reverse_segment_id.id);
+            }
         }
 
         search(engine_working_data,
@@ -171,9 +164,9 @@ void search(SearchEngineData<Algorithm> &engine_working_data,
                reverse_heap,
                new_total_weight_to_reverse,
                leg_packed_path_reverse,
-               routing_algorithms::DO_NOT_FORCE_LOOP,
-               needsLoopBackwards(source_phantom, target_phantom),
-               {source_phantom, target_phantom});
+               boost::none,
+               getBackwardLoopNode(source_candidates, target_phantom),
+               {source_candidates, {target_phantom}});
     }
 }
 
@@ -231,11 +224,10 @@ inline void initializeHeap<mld::Algorithm>(SearchEngineData<mld::Algorithm> &eng
 template <typename Algorithm>
 InternalRouteResult shortestPathSearch(SearchEngineData<Algorithm> &engine_working_data,
                                        const DataFacade<Algorithm> &facade,
-                                       const std::vector<PhantomNodes> &phantom_nodes_vector,
+                                       const std::vector<PhantomEndpointCandidates> &via_endpoints,
                                        const boost::optional<bool> continue_straight_at_waypoint)
 {
     InternalRouteResult raw_route_data;
-    raw_route_data.segment_end_coordinates = phantom_nodes_vector;
     const bool allow_uturn_at_waypoint =
         !(continue_straight_at_waypoint ? *continue_straight_at_waypoint
                                         : facade.GetContinueStraightDefault());
@@ -245,106 +237,141 @@ InternalRouteResult shortestPathSearch(SearchEngineData<Algorithm> &engine_worki
     auto &forward_heap = *engine_working_data.forward_heap_1;
     auto &reverse_heap = *engine_working_data.reverse_heap_1;
 
-    int total_weight_to_forward = 0;
-    int total_weight_to_reverse = 0;
-    bool search_from_forward_node =
-        phantom_nodes_vector.front().source_phantom.IsValidForwardSource();
-    bool search_from_reverse_node =
-        phantom_nodes_vector.front().source_phantom.IsValidReverseSource();
+    std::vector<EdgeWeight> total_weight_to_forward(via_endpoints.front().source_phantoms.size(),0);
+    std::vector<EdgeWeight> total_weight_to_reverse(via_endpoints.front().source_phantoms.size(),0);
+    std::vector<bool> search_from_forward_node;
+    std::transform(via_endpoints.front().source_phantoms.begin(),
+                   via_endpoints.front().source_phantoms.end(),
+                   std::back_inserter(search_from_forward_node), [](const PhantomNode &phantom_node) {
+                       return phantom_node.IsValidForwardSource();
+    });
+    std::vector<bool> search_from_reverse_node;
+    std::transform(via_endpoints.front().source_phantoms.begin(),
+                   via_endpoints.front().source_phantoms.end(),
+                   std::back_inserter(search_from_reverse_node), [](const PhantomNode &phantom_node) {
+                        return phantom_node.IsValidReverseSource();
+    });
 
-    std::vector<NodeID> prev_packed_leg_to_forward;
-    std::vector<NodeID> prev_packed_leg_to_reverse;
-
-    std::vector<NodeID> total_packed_path_to_forward;
-    std::vector<std::size_t> packed_leg_to_forward_begin;
-    std::vector<NodeID> total_packed_path_to_reverse;
-    std::vector<std::size_t> packed_leg_to_reverse_begin;
+    std::vector<std::vector<NodeID>> total_packed_path_to_forward;
+    std::vector<std::vector<std::size_t>> packed_leg_to_forward_begin;
+    std::vector<std::vector<NodeID>> total_packed_path_to_reverse;
+    std::vector<std::vector<std::size_t>> packed_leg_to_reverse_begin;
 
     std::size_t current_leg = 0;
     // this implements a dynamic program that finds the shortest route through
     // a list of vias
-    for (const auto &phantom_node_pair : phantom_nodes_vector)
+    for (const auto &via_endpoint : via_endpoints)
     {
-        int new_total_weight_to_forward = INVALID_EDGE_WEIGHT;
-        int new_total_weight_to_reverse = INVALID_EDGE_WEIGHT;
+        std::cout << " This via has " << via_endpoint.source_phantoms.size() << " sources" << std::endl;
+        std::cout << " This via has " << via_endpoint.target_phantoms.size() << " targets" << std::endl;
+        const auto &source_candidates = via_endpoint.source_phantoms;
 
-        std::vector<NodeID> packed_leg_to_forward;
-        std::vector<NodeID> packed_leg_to_reverse;
+        // TODO: Make these asserts more useful
+        BOOST_ASSERT(std::none_of(search_from_forward_node.begin(), search_from_forward_node.end(), [](auto v){ return v;}) || std::any_of(source_candidates.begin(), source_candidates.end(), [](const PhantomNode &phantom_node) {
+                         return phantom_node.IsValidForwardSource();
+        }));
+        BOOST_ASSERT(std::none_of(search_from_reverse_node.begin(), search_from_reverse_node.end(), [](auto v){ return v;}) || std::any_of(source_candidates.begin(), source_candidates.end(), [](const PhantomNode &phantom_node) {
+                         return phantom_node.IsValidReverseSource();
+        }));
 
-        const auto &source_phantom = phantom_node_pair.source_phantom;
-        const auto &target_phantom = phantom_node_pair.target_phantom;
+        std::vector<EdgeWeight> new_total_weight_to_forwards;
+        std::vector<EdgeWeight> new_total_weight_to_reverses;
+        std::vector<std::vector<NodeID>> packed_leg_to_forwards;
+        std::vector<std::vector<NodeID>> packed_leg_to_reverses;
 
-        bool search_to_forward_node = target_phantom.IsValidForwardTarget();
-        bool search_to_reverse_node = target_phantom.IsValidReverseTarget();
+        const auto num_targets = via_endpoint.target_phantoms.size();
+        std::vector<std::vector<NodeID>> new_total_packed_path_to_forward(num_targets);
+        std::vector<std::vector<std::size_t>> new_packed_leg_to_forward_begin(num_targets);
+        std::vector<std::vector<NodeID>> new_total_packed_path_to_reverse(num_targets);
+        std::vector<std::vector<std::size_t>> new_packed_leg_to_reverse_begin(num_targets);
 
-        BOOST_ASSERT(!search_from_forward_node || source_phantom.IsValidForwardSource());
-        BOOST_ASSERT(!search_from_reverse_node || source_phantom.IsValidReverseSource());
+        for (const auto &phantom_target: via_endpoint.target_phantoms) {
+            EdgeWeight new_total_weight_to_forward = INVALID_EDGE_WEIGHT;
+            EdgeWeight new_total_weight_to_reverse = INVALID_EDGE_WEIGHT;
 
-        if (search_to_reverse_node || search_to_forward_node)
-        {
-            if (allow_uturn_at_waypoint)
+            std::vector<NodeID> packed_leg_to_forward;
+            std::vector<NodeID> packed_leg_to_reverse;
+
+            bool search_to_forward_node = phantom_target.IsValidForwardTarget();
+            bool search_to_reverse_node = phantom_target.IsValidReverseTarget();
+
+            if (search_to_reverse_node || search_to_forward_node)
             {
-                searchWithUTurn(engine_working_data,
-                                facade,
-                                forward_heap,
-                                reverse_heap,
-                                search_from_forward_node,
-                                search_from_reverse_node,
-                                search_to_forward_node,
-                                search_to_reverse_node,
-                                source_phantom,
-                                target_phantom,
-                                total_weight_to_forward,
-                                total_weight_to_reverse,
-                                new_total_weight_to_forward,
-                                packed_leg_to_forward);
-                // if only the reverse node is valid (e.g. when using the match plugin) we
-                // actually need to move
-                if (!target_phantom.IsValidForwardTarget())
+                if (allow_uturn_at_waypoint)
                 {
-                    BOOST_ASSERT(target_phantom.IsValidReverseTarget());
-                    new_total_weight_to_reverse = new_total_weight_to_forward;
-                    packed_leg_to_reverse = std::move(packed_leg_to_forward);
-                    new_total_weight_to_forward = INVALID_EDGE_WEIGHT;
+                    searchWithUTurn(engine_working_data,
+                                    facade,
+                                    forward_heap,
+                                    reverse_heap,
+                                    search_from_forward_node,
+                                    search_from_reverse_node,
+                                    search_to_forward_node,
+                                    search_to_reverse_node,
+                                    source_candidates,
+                                    phantom_target,
+                                    total_weight_to_forward,
+                                    total_weight_to_reverse,
+                                    new_total_weight_to_forward,
+                                    packed_leg_to_forward);
+                    // if only the reverse node is valid (e.g. when using the match plugin) we
+                    // actually need to move
+                    if (!search_to_forward_node)
+                    {
+                        BOOST_ASSERT(search_to_reverse_node);
+                        new_total_weight_to_reverse = new_total_weight_to_forward;
+                        packed_leg_to_reverse = packed_leg_to_forward;
+                        new_total_weight_to_forward = INVALID_EDGE_WEIGHT;
 
-                    // (*)
-                    //
-                    //   Below we have to check if new_total_weight_to_forward is invalid.
-                    //   This prevents use-after-move on packed_leg_to_forward.
+                        // (*)
+                        //
+                        //   Below we have to check if new_total_weight_to_forward is invalid.
+                        //   This prevents use-after-move on packed_leg_to_forward.
+                    }
+                    else if (search_to_reverse_node)
+                    {
+                        new_total_weight_to_reverse = new_total_weight_to_forward;
+                        packed_leg_to_reverse = packed_leg_to_forward;
+                    }
                 }
-                else if (target_phantom.IsValidReverseTarget())
+                else
                 {
-                    new_total_weight_to_reverse = new_total_weight_to_forward;
-                    packed_leg_to_reverse = packed_leg_to_forward;
+                    search(engine_working_data,
+                           facade,
+                           forward_heap,
+                           reverse_heap,
+                           search_from_forward_node,
+                           search_from_reverse_node,
+                           search_to_forward_node,
+                           search_to_reverse_node,
+                           source_candidates,
+                           phantom_target,
+                           total_weight_to_forward,
+                           total_weight_to_reverse,
+                           new_total_weight_to_forward,
+                           new_total_weight_to_reverse,
+                           packed_leg_to_forward,
+                           packed_leg_to_reverse);
                 }
             }
-            else
-            {
-                search(engine_working_data,
-                       facade,
-                       forward_heap,
-                       reverse_heap,
-                       search_from_forward_node,
-                       search_from_reverse_node,
-                       search_to_forward_node,
-                       search_to_reverse_node,
-                       source_phantom,
-                       target_phantom,
-                       total_weight_to_forward,
-                       total_weight_to_reverse,
-                       new_total_weight_to_forward,
-                       new_total_weight_to_reverse,
-                       packed_leg_to_forward,
-                       packed_leg_to_reverse);
-            }
+
+            new_total_weight_to_forwards.push_back(new_total_weight_to_forward);
+            new_total_weight_to_reverses.push_back(new_total_weight_to_reverse);
+            packed_leg_to_forwards.push_back(packed_leg_to_forward);
+            packed_leg_to_reverses.push_back(packed_leg_to_reverse);
         }
+
 
         // Note: To make sure we do not access the moved-from packed_leg_to_forward
         // we guard its access by a check for invalid edge weight. See  (*) above.
 
         // No path found for both target nodes?
-        if ((INVALID_EDGE_WEIGHT == new_total_weight_to_forward) &&
-            (INVALID_EDGE_WEIGHT == new_total_weight_to_reverse))
+        const auto no_forward_route = std::all_of(new_total_weight_to_forwards.begin(), new_total_weight_to_forwards.end(), [](const auto weight) {
+            return weight == INVALID_EDGE_WEIGHT;
+        });
+        const auto no_reverse_route = std::all_of(new_total_weight_to_reverses.begin(), new_total_weight_to_reverses.end(), [](const auto weight) {
+          return weight == INVALID_EDGE_WEIGHT;
+        });
+        if (no_forward_route && no_reverse_route)
         {
             return raw_route_data;
         }
@@ -352,123 +379,242 @@ InternalRouteResult shortestPathSearch(SearchEngineData<Algorithm> &engine_worki
         // we need to figure out how the new legs connect to the previous ones
         if (current_leg > 0)
         {
-            bool forward_to_forward =
-                (new_total_weight_to_forward != INVALID_EDGE_WEIGHT) &&
-                packed_leg_to_forward.front() == source_phantom.forward_segment_id.id;
-            bool reverse_to_forward =
-                (new_total_weight_to_forward != INVALID_EDGE_WEIGHT) &&
-                packed_leg_to_forward.front() == source_phantom.reverse_segment_id.id;
-            bool forward_to_reverse =
-                (new_total_weight_to_reverse != INVALID_EDGE_WEIGHT) &&
-                packed_leg_to_reverse.front() == source_phantom.forward_segment_id.id;
-            bool reverse_to_reverse =
-                (new_total_weight_to_reverse != INVALID_EDGE_WEIGHT) &&
-                packed_leg_to_reverse.front() == source_phantom.reverse_segment_id.id;
-
-            BOOST_ASSERT(!forward_to_forward || !reverse_to_forward);
-            BOOST_ASSERT(!forward_to_reverse || !reverse_to_reverse);
-
-            // in this case we always need to copy
-            if (forward_to_forward && forward_to_reverse)
+            for (size_t i = 0; i < num_targets; ++i)
             {
-                // in this case we copy the path leading to the source forward node
-                // and change the case
-                total_packed_path_to_reverse = total_packed_path_to_forward;
-                packed_leg_to_reverse_begin = packed_leg_to_forward_begin;
-                forward_to_reverse = false;
-                reverse_to_reverse = true;
+                boost::optional<size_t> forward_to_forward;
+                boost::optional<size_t> reverse_to_forward;
+                boost::optional<size_t> forward_to_reverse;
+                boost::optional<size_t> reverse_to_reverse;
+                for (size_t j = 0; j < source_candidates.size(); ++j) {
+                    std::cout << j << " of " << source_candidates.size() << std::endl;
+                    const auto &candidate = source_candidates[j];
+
+                    if ((new_total_weight_to_forwards[i] != INVALID_EDGE_WEIGHT) && candidate.IsValidForwardSource() &&
+                        packed_leg_to_forwards[i].front() == candidate.forward_segment_id.id) {
+                        forward_to_forward = j;
+                        std::cout << " found forward to forward " << j << std::endl;
+                    }
+                    if ((new_total_weight_to_forwards[i] != INVALID_EDGE_WEIGHT) && candidate.IsValidReverseSource() &&
+                        packed_leg_to_forwards[i].front() == candidate.reverse_segment_id.id) {
+                        reverse_to_forward = j;
+                        std::cout << " found reverse to forward " << j << std::endl;
+                    }
+                    if ((new_total_weight_to_reverses[i] != INVALID_EDGE_WEIGHT) && candidate.IsValidForwardSource() &&
+                        packed_leg_to_reverses[i].front() == candidate.forward_segment_id.id) {
+                        forward_to_reverse = j;
+                        std::cout << " found forward to reverse " << j << std::endl;
+                    }
+                    if ((new_total_weight_to_reverses[i] != INVALID_EDGE_WEIGHT) && candidate.IsValidReverseSource() &&
+                            packed_leg_to_reverses[i].front() == candidate.reverse_segment_id.id) {
+                        reverse_to_reverse = j;
+                        std::cout << " found reverse to reverse " << j << std::endl;
+                    }
+                }
+
+                std::cout << " BOOST ASSERT 1" << std::endl;
+                BOOST_ASSERT(!(forward_to_forward && reverse_to_forward));
+                BOOST_ASSERT(!(forward_to_reverse && reverse_to_reverse));
+                std::cout << " BOOST ASSERT 2" << std::endl;
+
+                if (forward_to_forward) {
+                    new_total_packed_path_to_forward[i] = total_packed_path_to_forward[*forward_to_forward];
+                    new_packed_leg_to_forward_begin[i] = packed_leg_to_forward_begin[*forward_to_forward];
+                    std::cout << " adding " << *forward_to_forward <<  " to new forward packed leg " << new_packed_leg_to_forward_begin.size() << std::endl;
+                } else if (reverse_to_forward) {
+                    new_total_packed_path_to_forward[i] = total_packed_path_to_reverse[*reverse_to_forward];
+                    new_packed_leg_to_forward_begin[i] = packed_leg_to_reverse_begin[*reverse_to_forward];
+                    std::cout << " adding " << *reverse_to_forward <<  " to new forward packed leg " << new_packed_leg_to_forward_begin.size() << std::endl;
+                } else {
+                    new_total_packed_path_to_forward[i] = {};
+                    new_packed_leg_to_forward_begin[i] = {};
+                    std::cout << " adding empty to new forward packed leg " << new_packed_leg_to_forward_begin.size() << std::endl;
+                }
+
+                if (forward_to_reverse) {
+                    new_total_packed_path_to_reverse[i] = total_packed_path_to_forward[*forward_to_reverse];
+                    new_packed_leg_to_reverse_begin[i] = packed_leg_to_forward_begin[*forward_to_reverse];
+                    std::cout << " adding " << *forward_to_reverse <<  " to new reverse packed leg " << new_packed_leg_to_reverse_begin.size() << std::endl;
+                } else if (reverse_to_reverse) {
+                    new_total_packed_path_to_reverse[i] = total_packed_path_to_reverse[*reverse_to_reverse];
+                    new_packed_leg_to_reverse_begin[i] = packed_leg_to_reverse_begin[*reverse_to_reverse];
+                    std::cout << " adding " << *reverse_to_reverse <<  " to new reverse packed leg " << new_packed_leg_to_reverse_begin.size() << std::endl;
+                } else {
+                    new_total_packed_path_to_reverse[i] = {};
+                    new_packed_leg_to_reverse_begin[i] = {};
+                    std::cout << " adding empty to new reverse packed leg " << new_packed_leg_to_reverse_begin.size() << std::endl;
+                }
             }
-            else if (reverse_to_forward && reverse_to_reverse)
+        }
+
+        std::vector<bool> new_search_from_forward_node(num_targets);
+        std::vector<bool> new_search_from_reverse_node(num_targets);
+        for (size_t i = 0; i < num_targets; ++i) {
+
+            if (new_total_weight_to_forwards[i] != INVALID_EDGE_WEIGHT)
             {
-                total_packed_path_to_forward = total_packed_path_to_reverse;
-                packed_leg_to_forward_begin = packed_leg_to_reverse_begin;
-                reverse_to_forward = false;
-                forward_to_forward = true;
-            }
-            BOOST_ASSERT(!forward_to_forward || !forward_to_reverse);
-            BOOST_ASSERT(!reverse_to_forward || !reverse_to_reverse);
+                auto forward_target = via_endpoint.target_phantoms[i];
+                BOOST_ASSERT( forward_target.IsValidForwardTarget());
 
-            // in this case we just need to swap to regain the correct mapping
-            if (reverse_to_forward || forward_to_reverse)
+                new_packed_leg_to_forward_begin[i].push_back(new_total_packed_path_to_forward[i].size());
+                std::cout << " adding new size " <<  new_total_packed_path_to_forward[i].size() << " to new forward packed leg " << new_packed_leg_to_forward_begin[i].size() << std::endl;
+                new_total_packed_path_to_forward[i].insert(new_total_packed_path_to_forward[i].end(), packed_leg_to_forwards[i].begin(), packed_leg_to_forwards[i].end());
+                new_search_from_forward_node[i] = true;
+            }
+            else
             {
-                total_packed_path_to_forward.swap(total_packed_path_to_reverse);
-                packed_leg_to_forward_begin.swap(packed_leg_to_reverse_begin);
+                new_total_packed_path_to_forward[i].clear();
+                new_packed_leg_to_forward_begin[i].clear();
+                new_search_from_forward_node[i] = false;
+                std::cout << "clearing new forward packed leg " << new_packed_leg_to_forward_begin[i].size() << std::endl;
             }
+
+            if (new_total_weight_to_reverses[i] != INVALID_EDGE_WEIGHT)
+            {
+                auto reverse_target = via_endpoint.target_phantoms[i];
+                BOOST_ASSERT(reverse_target.IsValidReverseTarget());
+
+                new_packed_leg_to_reverse_begin[i].push_back(new_total_packed_path_to_reverse[i].size());
+                std::cout << " adding new size " <<  new_total_packed_path_to_reverse[i].size() << " to new reverse packed leg " << new_packed_leg_to_reverse_begin[i].size() << std::endl;
+                new_total_packed_path_to_reverse[i].insert(new_total_packed_path_to_reverse[i].end(),
+                                                    packed_leg_to_reverses[i].begin(),
+                                                    packed_leg_to_reverses[i].end());
+                new_search_from_reverse_node[i] = true;
+            }
+            else
+            {
+                new_total_packed_path_to_reverse[i].clear();
+                new_packed_leg_to_reverse_begin[i].clear();
+                new_search_from_reverse_node[i] = false;
+                std::cout << "clearing new reverse packed leg " << new_packed_leg_to_reverse_begin[i].size() << std::endl;
+            }
+
+        }
+        total_weight_to_forward = new_total_weight_to_forwards;
+        total_weight_to_reverse = new_total_weight_to_reverses;
+
+        total_packed_path_to_forward = new_total_packed_path_to_forward;
+        packed_leg_to_forward_begin = new_packed_leg_to_forward_begin;
+        total_packed_path_to_reverse = new_total_packed_path_to_reverse;
+        packed_leg_to_reverse_begin = new_packed_leg_to_reverse_begin;
+
+        for (const auto &forward_begin : packed_leg_to_forward_begin) {
+            std::cout << "forward_begin has size " << forward_begin.size() << std::endl;
         }
 
-        if (new_total_weight_to_forward != INVALID_EDGE_WEIGHT)
-        {
-            BOOST_ASSERT(target_phantom.IsValidForwardTarget());
-
-            packed_leg_to_forward_begin.push_back(total_packed_path_to_forward.size());
-            total_packed_path_to_forward.insert(total_packed_path_to_forward.end(),
-                                                packed_leg_to_forward.begin(),
-                                                packed_leg_to_forward.end());
-            search_from_forward_node = true;
-        }
-        else
-        {
-            total_packed_path_to_forward.clear();
-            packed_leg_to_forward_begin.clear();
-            search_from_forward_node = false;
+        for (const auto &reverse_begin : packed_leg_to_reverse_begin) {
+            std::cout << "reverse_begin has size " << reverse_begin.size() << std::endl;
         }
 
-        if (new_total_weight_to_reverse != INVALID_EDGE_WEIGHT)
-        {
-            BOOST_ASSERT(target_phantom.IsValidReverseTarget());
-
-            packed_leg_to_reverse_begin.push_back(total_packed_path_to_reverse.size());
-            total_packed_path_to_reverse.insert(total_packed_path_to_reverse.end(),
-                                                packed_leg_to_reverse.begin(),
-                                                packed_leg_to_reverse.end());
-            search_from_reverse_node = true;
-        }
-        else
-        {
-            total_packed_path_to_reverse.clear();
-            packed_leg_to_reverse_begin.clear();
-            search_from_reverse_node = false;
-        }
-
-        prev_packed_leg_to_forward = std::move(packed_leg_to_forward);
-        prev_packed_leg_to_reverse = std::move(packed_leg_to_reverse);
-
-        total_weight_to_forward = new_total_weight_to_forward;
-        total_weight_to_reverse = new_total_weight_to_reverse;
+        search_from_reverse_node = new_search_from_reverse_node;
+        search_from_forward_node = new_search_from_forward_node;
 
         ++current_leg;
     }
 
-    BOOST_ASSERT(total_weight_to_forward != INVALID_EDGE_WEIGHT ||
-                 total_weight_to_reverse != INVALID_EDGE_WEIGHT);
+    const auto a_forward_route = std::any_of(total_weight_to_forward.begin(), total_weight_to_forward.end(), [](const auto weight) {
+      return weight != INVALID_EDGE_WEIGHT;
+    });
+    const auto a_reverse_route = std::any_of(total_weight_to_reverse.begin(), total_weight_to_reverse.end(), [](const auto weight) {
+      return weight != INVALID_EDGE_WEIGHT;
+    });
+    BOOST_ASSERT(a_forward_route || a_reverse_route);
 
     // We make sure the fastest route is always in packed_legs_to_forward
-    if (total_weight_to_forward < total_weight_to_reverse ||
-        (total_weight_to_forward == total_weight_to_reverse &&
-         total_packed_path_to_forward.size() < total_packed_path_to_reverse.size()))
+    auto forward_range = util::irange<std::size_t>(0UL, total_weight_to_forward.size());
+    auto forward_min = std::min_element(forward_range.begin(), forward_range.end(), [&](size_t a, size_t b) {
+      return (total_weight_to_forward[a] < total_weight_to_forward[b] ||
+          (total_weight_to_forward[a] == total_weight_to_forward[b] &&
+           total_packed_path_to_forward[a].size() < total_packed_path_to_forward[b].size()));
+    });
+    auto reverse_range = util::irange<std::size_t>(0UL, total_weight_to_reverse.size());
+    auto reverse_min = std::min_element(reverse_range.begin(), reverse_range.end(), [&](size_t a, size_t b) {
+      return (total_weight_to_reverse[a] < total_weight_to_reverse[b] ||
+              (total_weight_to_reverse[a] == total_weight_to_reverse[b] &&
+               total_packed_path_to_reverse[a].size() < total_packed_path_to_reverse[b].size()));
+    });
+
+    if (total_weight_to_forward[*forward_min] < total_weight_to_reverse[*reverse_min] ||
+        (total_weight_to_forward[*forward_min] == total_weight_to_reverse[*reverse_min] &&
+         total_packed_path_to_forward[*forward_min].size() < total_packed_path_to_reverse[*reverse_min].size()))
     {
         // insert sentinel
-        packed_leg_to_forward_begin.push_back(total_packed_path_to_forward.size());
-        BOOST_ASSERT(packed_leg_to_forward_begin.size() == phantom_nodes_vector.size() + 1);
+        packed_leg_to_forward_begin[*forward_min].push_back(total_packed_path_to_forward[*forward_min].size());
+        BOOST_ASSERT(packed_leg_to_forward_begin[*forward_min].size() == via_endpoints.size() + 1);
+
+        // Find the start/end phantom nodes
+        std::vector<PhantomNodes> path_phantoms;
+        for (size_t i = 0; i < via_endpoints.size(); ++i) {
+            const auto start_node = total_packed_path_to_forward[*forward_min][packed_leg_to_forward_begin[*forward_min][i]];
+            const auto end_node = total_packed_path_to_forward[*forward_min][packed_leg_to_forward_begin[*forward_min][i+1]-1];
+
+            boost::optional<PhantomNode> shortest_source;
+            for(const PhantomNode &source_phantom : via_endpoints[i].source_phantoms) {
+                if (start_node == source_phantom.forward_segment_id.id || start_node == source_phantom.reverse_segment_id.id) {
+                    shortest_source = source_phantom;
+                    break;
+                }
+            };
+            BOOST_ASSERT(shortest_source);
+
+            boost::optional<PhantomNode> shortest_target;
+            for(const PhantomNode &target_phantom : via_endpoints[i].target_phantoms) {
+                if (end_node == target_phantom.forward_segment_id.id || end_node == target_phantom.reverse_segment_id.id) {
+                    shortest_target = target_phantom;
+                    break;
+                }
+            };
+            BOOST_ASSERT(shortest_target);
+
+            path_phantoms.push_back({*shortest_source, *shortest_target});
+        }
+        raw_route_data.segment_end_coordinates = path_phantoms;
 
         unpackLegs(facade,
-                   phantom_nodes_vector,
-                   total_packed_path_to_forward,
-                   packed_leg_to_forward_begin,
-                   total_weight_to_forward,
+                   path_phantoms,
+                   total_packed_path_to_forward[*forward_min],
+                   packed_leg_to_forward_begin[*forward_min],
+                   total_weight_to_forward[*forward_min],
                    raw_route_data);
     }
     else
     {
         // insert sentinel
-        packed_leg_to_reverse_begin.push_back(total_packed_path_to_reverse.size());
-        BOOST_ASSERT(packed_leg_to_reverse_begin.size() == phantom_nodes_vector.size() + 1);
+        packed_leg_to_reverse_begin[*reverse_min].push_back(total_packed_path_to_reverse[*reverse_min].size());
+        BOOST_ASSERT(packed_leg_to_reverse_begin[*reverse_min].size() == via_endpoints.size() + 1);
+
+        // Find the start/end phantom nodes
+
+        std::vector<PhantomNodes> path_phantoms;
+        for (size_t i = 0; i < via_endpoints.size(); ++i) {
+            const auto start_node = total_packed_path_to_reverse[*reverse_min][packed_leg_to_reverse_begin[*reverse_min][i]];
+            const auto end_node = total_packed_path_to_reverse[*reverse_min][packed_leg_to_reverse_begin[*reverse_min][i+1]-1];
+
+            boost::optional<PhantomNode> shortest_source;
+            for(const PhantomNode &source_phantom : via_endpoints[i].source_phantoms) {
+                if (start_node == source_phantom.forward_segment_id.id || start_node == source_phantom.reverse_segment_id.id) {
+                    shortest_source = source_phantom;
+                    break;
+                }
+            };
+            BOOST_ASSERT(shortest_source);
+
+            boost::optional<PhantomNode> shortest_target;
+            for(const PhantomNode &target_phantom : via_endpoints[i].target_phantoms) {
+                if (end_node == target_phantom.forward_segment_id.id || end_node == target_phantom.reverse_segment_id.id) {
+                    shortest_target = target_phantom;
+                    break;
+                }
+            };
+
+            path_phantoms.push_back({*shortest_source, *shortest_target});
+        }
+        raw_route_data.segment_end_coordinates = path_phantoms;
 
         unpackLegs(facade,
-                   phantom_nodes_vector,
-                   total_packed_path_to_reverse,
-                   packed_leg_to_reverse_begin,
-                   total_weight_to_reverse,
+                   path_phantoms,
+                   total_packed_path_to_reverse[*reverse_min],
+                   packed_leg_to_reverse_begin[*reverse_min],
+                   total_weight_to_reverse[*reverse_min],
                    raw_route_data);
     }
 

@@ -20,18 +20,18 @@ class RoutingAlgorithmsInterface
 {
   public:
     virtual InternalManyRoutesResult
-    AlternativePathSearch(const PhantomNodes &phantom_node_pair,
+    AlternativePathSearch(const PhantomEndpointCandidates &endpoint_candidates,
                           unsigned number_of_alternatives) const = 0;
 
     virtual InternalRouteResult
-    ShortestPathSearch(const std::vector<PhantomNodes> &phantom_node_pair,
+    ShortestPathSearch(const std::vector<PhantomEndpointCandidates> &via_candidates_list,
                        const boost::optional<bool> continue_straight_at_waypoint) const = 0;
 
     virtual InternalRouteResult
-    DirectShortestPathSearch(const PhantomNodes &phantom_node_pair) const = 0;
+    DirectShortestPathSearch(const PhantomEndpointCandidates &endpoint_candidates) const = 0;
 
     virtual std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
-    ManyToManySearch(const std::vector<PhantomNode> &phantom_nodes,
+    ManyToManySearch(const std::vector<PhantomNodeCandidates> &phantom_nodes,
                      const std::vector<std::size_t> &source_indices,
                      const std::vector<std::size_t> &target_indices,
                      const bool calculate_distance) const = 0;
@@ -73,18 +73,18 @@ template <typename Algorithm> class RoutingAlgorithms final : public RoutingAlgo
     virtual ~RoutingAlgorithms() = default;
 
     InternalManyRoutesResult
-    AlternativePathSearch(const PhantomNodes &phantom_node_pair,
+    AlternativePathSearch(const PhantomEndpointCandidates &endpoint_candidates,
                           unsigned number_of_alternatives) const final override;
 
     InternalRouteResult ShortestPathSearch(
-        const std::vector<PhantomNodes> &phantom_node_pair,
+        const std::vector<PhantomEndpointCandidates> &via_candidates_list,
         const boost::optional<bool> continue_straight_at_waypoint) const final override;
 
     InternalRouteResult
-    DirectShortestPathSearch(const PhantomNodes &phantom_nodes) const final override;
+    DirectShortestPathSearch(const PhantomEndpointCandidates &endpoint_candidates) const final override;
 
-    virtual std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
-    ManyToManySearch(const std::vector<PhantomNode> &phantom_nodes,
+    std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
+    ManyToManySearch(const std::vector<PhantomNodeCandidates> &phantom_nodes,
                      const std::vector<std::size_t> &source_indices,
                      const std::vector<std::size_t> &target_indices,
                      const bool calculate_distance) const final override;
@@ -151,27 +151,27 @@ template <typename Algorithm> class RoutingAlgorithms final : public RoutingAlgo
 
 template <typename Algorithm>
 InternalManyRoutesResult
-RoutingAlgorithms<Algorithm>::AlternativePathSearch(const PhantomNodes &phantom_node_pair,
+RoutingAlgorithms<Algorithm>::AlternativePathSearch(const PhantomEndpointCandidates &endpoint_candidates,
                                                     unsigned number_of_alternatives) const
 {
     return routing_algorithms::alternativePathSearch(
-        heaps, *facade, phantom_node_pair, number_of_alternatives);
+        heaps, *facade, endpoint_candidates, number_of_alternatives);
 }
 
 template <typename Algorithm>
 InternalRouteResult RoutingAlgorithms<Algorithm>::ShortestPathSearch(
-    const std::vector<PhantomNodes> &phantom_node_pair,
+    const std::vector<PhantomEndpointCandidates> &via_candidates_list,
     const boost::optional<bool> continue_straight_at_waypoint) const
 {
     return routing_algorithms::shortestPathSearch(
-        heaps, *facade, phantom_node_pair, continue_straight_at_waypoint);
+        heaps, *facade, via_candidates_list, continue_straight_at_waypoint);
 }
 
 template <typename Algorithm>
 InternalRouteResult
-RoutingAlgorithms<Algorithm>::DirectShortestPathSearch(const PhantomNodes &phantom_nodes) const
+RoutingAlgorithms<Algorithm>::DirectShortestPathSearch(const PhantomEndpointCandidates &endpoint_candidates) const
 {
-    return routing_algorithms::directShortestPathSearch(heaps, *facade, phantom_nodes);
+    return routing_algorithms::directShortestPathSearch(heaps, *facade, endpoint_candidates);
 }
 
 template <typename Algorithm>
@@ -193,7 +193,7 @@ inline routing_algorithms::SubMatchingList RoutingAlgorithms<Algorithm>::MapMatc
 
 template <typename Algorithm>
 std::pair<std::vector<EdgeDuration>, std::vector<EdgeDistance>>
-RoutingAlgorithms<Algorithm>::ManyToManySearch(const std::vector<PhantomNode> &phantom_nodes,
+RoutingAlgorithms<Algorithm>::ManyToManySearch(const std::vector<PhantomNodeCandidates> &phantom_nodes,
                                                const std::vector<std::size_t> &_source_indices,
                                                const std::vector<std::size_t> &_target_indices,
                                                const bool calculate_distance) const

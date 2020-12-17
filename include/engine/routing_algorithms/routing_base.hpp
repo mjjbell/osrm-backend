@@ -38,85 +38,90 @@ static constexpr bool FORWARD_DIRECTION = true;
 static constexpr bool REVERSE_DIRECTION = false;
 static constexpr bool DO_NOT_FORCE_LOOPS = false;
 
-bool needsLoopForward(const PhantomNode &source_phantom, const PhantomNode &target_phantom);
-bool needsLoopBackwards(const PhantomNode &source_phantom, const PhantomNode &target_phantom);
-
-bool needsLoopForward(const PhantomNodes &phantoms);
-bool needsLoopBackwards(const PhantomNodes &phantoms);
+boost::optional<NodeID> getForwardLoopNode(const std::vector<PhantomNode> &source_candidates, const PhantomNode &target_phantom);
+boost::optional<NodeID> getBackwardLoopNode(const std::vector<PhantomNode> &source_candidates, const PhantomNode &target_phantom);
 
 template <typename Heap>
-void insertNodesInHeaps(Heap &forward_heap, Heap &reverse_heap, const PhantomNodes &nodes)
+void insertNodesInHeaps(Heap &forward_heap, Heap &reverse_heap, const PhantomEndpointCandidates &endpoint_candidates)
 {
-    const auto &source = nodes.source_phantom;
-    if (source.IsValidForwardSource())
-    {
-        forward_heap.Insert(source.forward_segment_id.id,
-                            -source.GetForwardWeightPlusOffset(),
-                            source.forward_segment_id.id);
+    for (const auto &phantom_source: endpoint_candidates.source_phantoms) {
+        if (phantom_source.IsValidForwardSource())
+        {
+            forward_heap.Insert(phantom_source.forward_segment_id.id,
+                                -phantom_source.GetForwardWeightPlusOffset(),
+                                phantom_source.forward_segment_id.id);
+        }
+
+        if (phantom_source.IsValidReverseSource())
+        {
+            forward_heap.Insert(phantom_source.reverse_segment_id.id,
+                                -phantom_source.GetReverseWeightPlusOffset(),
+                                phantom_source.reverse_segment_id.id);
+        }
     }
 
-    if (source.IsValidReverseSource())
+    for (const auto &phantom_target: endpoint_candidates.target_phantoms)
     {
-        forward_heap.Insert(source.reverse_segment_id.id,
-                            -source.GetReverseWeightPlusOffset(),
-                            source.reverse_segment_id.id);
-    }
+        if (phantom_target.IsValidForwardTarget())
+        {
+            reverse_heap.Insert(phantom_target.forward_segment_id.id,
+                                phantom_target.GetForwardWeightPlusOffset(),
+                                phantom_target.forward_segment_id.id);
+        }
 
-    const auto &target = nodes.target_phantom;
-    if (target.IsValidForwardTarget())
-    {
-        reverse_heap.Insert(target.forward_segment_id.id,
-                            target.GetForwardWeightPlusOffset(),
-                            target.forward_segment_id.id);
-    }
-
-    if (target.IsValidReverseTarget())
-    {
-        reverse_heap.Insert(target.reverse_segment_id.id,
-                            target.GetReverseWeightPlusOffset(),
-                            target.reverse_segment_id.id);
+        if (phantom_target.IsValidReverseTarget())
+        {
+            reverse_heap.Insert(phantom_target.reverse_segment_id.id,
+                                phantom_target.GetReverseWeightPlusOffset(),
+                                phantom_target.reverse_segment_id.id);
+        }
     }
 }
 
 template <typename ManyToManyQueryHeap>
-void insertSourceInHeap(ManyToManyQueryHeap &heap, const PhantomNode &phantom_node)
+void insertSourceInHeap(ManyToManyQueryHeap &heap, const PhantomNodeCandidates &candidates)
 {
-    if (phantom_node.IsValidForwardSource())
+    for (const auto &phantom_node : candidates)
     {
-        heap.Insert(phantom_node.forward_segment_id.id,
-                    -phantom_node.GetForwardWeightPlusOffset(),
-                    {phantom_node.forward_segment_id.id,
-                     -phantom_node.GetForwardDuration(),
-                     -phantom_node.GetForwardDistance()});
-    }
-    if (phantom_node.IsValidReverseSource())
-    {
-        heap.Insert(phantom_node.reverse_segment_id.id,
-                    -phantom_node.GetReverseWeightPlusOffset(),
-                    {phantom_node.reverse_segment_id.id,
-                     -phantom_node.GetReverseDuration(),
-                     -phantom_node.GetReverseDistance()});
+        if (phantom_node.IsValidForwardSource())
+        {
+            heap.Insert(phantom_node.forward_segment_id.id,
+                        -phantom_node.GetForwardWeightPlusOffset(),
+                        {phantom_node.forward_segment_id.id,
+                         -phantom_node.GetForwardDuration(),
+                         -phantom_node.GetForwardDistance()});
+        }
+        if (phantom_node.IsValidReverseSource())
+        {
+            heap.Insert(phantom_node.reverse_segment_id.id,
+                        -phantom_node.GetReverseWeightPlusOffset(),
+                        {phantom_node.reverse_segment_id.id,
+                         -phantom_node.GetReverseDuration(),
+                         -phantom_node.GetReverseDistance()});
+        }
     }
 }
 
 template <typename ManyToManyQueryHeap>
-void insertTargetInHeap(ManyToManyQueryHeap &heap, const PhantomNode &phantom_node)
+void insertTargetInHeap(ManyToManyQueryHeap &heap, const PhantomNodeCandidates &candidates)
 {
-    if (phantom_node.IsValidForwardTarget())
-    {
-        heap.Insert(phantom_node.forward_segment_id.id,
-                    phantom_node.GetForwardWeightPlusOffset(),
-                    {phantom_node.forward_segment_id.id,
-                     phantom_node.GetForwardDuration(),
-                     phantom_node.GetForwardDistance()});
-    }
-    if (phantom_node.IsValidReverseTarget())
-    {
-        heap.Insert(phantom_node.reverse_segment_id.id,
-                    phantom_node.GetReverseWeightPlusOffset(),
-                    {phantom_node.reverse_segment_id.id,
-                     phantom_node.GetReverseDuration(),
-                     phantom_node.GetReverseDistance()});
+    for (const auto &phantom_node : candidates) {
+        if (phantom_node.IsValidForwardTarget())
+        {
+            heap.Insert(phantom_node.forward_segment_id.id,
+                        phantom_node.GetForwardWeightPlusOffset(),
+                        {phantom_node.forward_segment_id.id,
+                         phantom_node.GetForwardDuration(),
+                         phantom_node.GetForwardDistance()});
+        }
+        if (phantom_node.IsValidReverseTarget())
+        {
+            heap.Insert(phantom_node.reverse_segment_id.id,
+                        phantom_node.GetReverseWeightPlusOffset(),
+                        {phantom_node.reverse_segment_id.id,
+                         phantom_node.GetReverseDuration(),
+                         phantom_node.GetReverseDistance()});
+        }
     }
 }
 
@@ -136,6 +141,14 @@ void annotatePath(const FacadeT &facade,
         phantom_node_pair.source_phantom.forward_segment_id.id != source_node_id;
     const bool target_traversed_in_reverse =
         phantom_node_pair.target_phantom.forward_segment_id.id != target_node_id;
+
+    std::cout << "source_node_id " << source_node_id << std::endl;
+    std::cout << phantom_node_pair.source_phantom.forward_segment_id.id << std::endl;
+    std::cout << phantom_node_pair.source_phantom.reverse_segment_id.id << std::endl;
+
+    std::cout << "target_node_id " << target_node_id << std::endl;
+    std::cout << phantom_node_pair.target_phantom.forward_segment_id.id << std::endl;
+    std::cout << phantom_node_pair.target_phantom.reverse_segment_id.id << std::endl;
 
     BOOST_ASSERT(phantom_node_pair.source_phantom.forward_segment_id.id == source_node_id ||
                  phantom_node_pair.source_phantom.reverse_segment_id.id == source_node_id);
@@ -306,7 +319,7 @@ void annotatePath(const FacadeT &facade,
                      is_target_left_hand_driving});
     }
 
-    if (unpacked_path.size() > 0)
+    if (!unpacked_path.empty())
     {
         const auto source_weight = start_traversed_in_reverse
                                        ? phantom_node_pair.source_phantom.reverse_weight
@@ -390,12 +403,11 @@ double getPathDistance(const DataFacade<Algorithm> &facade,
 template <typename AlgorithmT>
 InternalRouteResult extractRoute(const DataFacade<AlgorithmT> &facade,
                                  const EdgeWeight weight,
-                                 const PhantomNodes &phantom_nodes,
+                                 const PhantomEndpointCandidates &endpoint_candidates,
                                  const std::vector<NodeID> &unpacked_nodes,
                                  const std::vector<EdgeID> &unpacked_edges)
 {
     InternalRouteResult raw_route_data;
-    raw_route_data.segment_end_coordinates = {phantom_nodes};
 
     // No path found for both target nodes?
     if (INVALID_EDGE_WEIGHT == weight)
@@ -403,15 +415,36 @@ InternalRouteResult extractRoute(const DataFacade<AlgorithmT> &facade,
         return raw_route_data;
     }
 
+    boost::optional<PhantomNode> shortest_source;
+    for(const PhantomNode &source_phantom : endpoint_candidates.source_phantoms) {
+        if (unpacked_nodes.front() == source_phantom.forward_segment_id.id || unpacked_nodes.front() == source_phantom.reverse_segment_id.id) {
+            shortest_source = source_phantom;
+            break;
+        }
+    };
+    BOOST_ASSERT(shortest_source != boost::none);
+
+    boost::optional<PhantomNode> shortest_target;
+    for(const PhantomNode &target_phantom : endpoint_candidates.target_phantoms) {
+        if (unpacked_nodes.back() == target_phantom.forward_segment_id.id || unpacked_nodes.back() == target_phantom.reverse_segment_id.id) {
+            shortest_target = target_phantom;
+            break;
+        }
+    };
+    BOOST_ASSERT(shortest_target != boost::none);
+    PhantomNodes phantom_endpoints{*shortest_source, *shortest_target};
+
+    raw_route_data.segment_end_coordinates = {phantom_endpoints};
+
     raw_route_data.shortest_path_weight = weight;
     raw_route_data.unpacked_path_segments.resize(1);
     raw_route_data.source_traversed_in_reverse.push_back(
-        (unpacked_nodes.front() != phantom_nodes.source_phantom.forward_segment_id.id));
+        (unpacked_nodes.front() != phantom_endpoints.source_phantom.forward_segment_id.id));
     raw_route_data.target_traversed_in_reverse.push_back(
-        (unpacked_nodes.back() != phantom_nodes.target_phantom.forward_segment_id.id));
+        (unpacked_nodes.back() != phantom_endpoints.target_phantom.forward_segment_id.id));
 
     annotatePath(facade,
-                 phantom_nodes,
+                 phantom_endpoints,
                  unpacked_nodes,
                  unpacked_edges,
                  raw_route_data.unpacked_path_segments.front());

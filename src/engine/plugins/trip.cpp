@@ -53,13 +53,12 @@ bool IsSupportedParameterCombination(const bool fixed_start,
 // given the node order in which to visit, compute the actual route (with geometry, travel time and
 // so on) and return the result
 InternalRouteResult TripPlugin::ComputeRoute(const RoutingAlgorithmsInterface &algorithms,
-                                             const std::vector<PhantomNode> &snapped_phantoms,
+                                             const std::vector<PhantomNodeCandidates> &phantom_nodes,
                                              const std::vector<NodeID> &trip,
                                              const bool roundtrip) const
 {
-    InternalRouteResult min_route;
     // given the final trip, compute total duration and return the route and location permutation
-    PhantomNodes viapoint;
+    std::vector<PhantomEndpointCandidates> via_endpoints;
 
     // computes a roundtrip from the nodes in trip
     for (auto node = trip.begin(); node < trip.end() - 1; ++node)
@@ -67,25 +66,23 @@ InternalRouteResult TripPlugin::ComputeRoute(const RoutingAlgorithmsInterface &a
         const auto from_node = *node;
         const auto to_node = *std::next(node);
 
-        viapoint = PhantomNodes{snapped_phantoms[from_node], snapped_phantoms[to_node]};
-        min_route.segment_end_coordinates.emplace_back(viapoint);
+        via_endpoints.push_back(PhantomEndpointCandidates{phantom_nodes[from_node], phantom_nodes[to_node]});
     }
 
     // return back to the first node if it is a round trip
     if (roundtrip)
     {
-        viapoint = PhantomNodes{snapped_phantoms[trip.back()], snapped_phantoms[trip.front()]};
-        min_route.segment_end_coordinates.emplace_back(viapoint);
+        via_endpoints.push_back(PhantomEndpointCandidates{phantom_nodes[trip.back()], phantom_nodes[trip.front()]});
         // trip comes out to be something like 0 1 4 3 2 0
-        BOOST_ASSERT(min_route.segment_end_coordinates.size() == trip.size());
+        BOOST_ASSERT(via_endpoints.size() == trip.size());
     }
     else
     {
         // trip comes out to be something like 0 1 4 3 2, so the sizes don't match
-        BOOST_ASSERT(min_route.segment_end_coordinates.size() == trip.size() - 1);
+        BOOST_ASSERT(via_endpoints.size() == trip.size() - 1);
     }
 
-    min_route = algorithms.ShortestPathSearch(min_route.segment_end_coordinates, {false});
+    const auto &min_route = algorithms.ShortestPathSearch(via_endpoints, {false});
     BOOST_ASSERT_MSG(min_route.shortest_path_weight < INVALID_EDGE_WEIGHT, "unroutable route");
     return min_route;
 }
@@ -217,7 +214,7 @@ Status TripPlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithms,
 
     // compute the duration table of all phantom nodes
     auto result_duration_table = util::DistTableWrapper<EdgeWeight>(
-        algorithms.ManyToManySearch(snapped_phantoms, {}, {}, /*requestDistance*/ false).first,
+        std::get<0>(algorithms.ManyToManySearch(snapped_phantoms, {}, {}, /*requestDistance*/ false)),
         number_of_locations);
 
     if (result_duration_table.size() == 0)

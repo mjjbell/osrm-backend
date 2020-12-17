@@ -190,8 +190,8 @@ void computeWeightAndSharingOfViaPath(SearchEngineData<Algorithm> &engine_workin
                                        s_v_middle,
                                        upper_bound_s_v_path_weight,
                                        min_edge_offset,
-                                       DO_NOT_FORCE_LOOPS,
-                                       DO_NOT_FORCE_LOOPS);
+                                       boost::none,
+                                       boost::none);
     }
     // compute path <v,..,t> by reusing backward search from node t
     NodeID v_t_middle = SPECIAL_NODEID;
@@ -205,8 +205,8 @@ void computeWeightAndSharingOfViaPath(SearchEngineData<Algorithm> &engine_workin
                                        v_t_middle,
                                        upper_bound_of_v_t_path_weight,
                                        min_edge_offset,
-                                       DO_NOT_FORCE_LOOPS,
-                                       DO_NOT_FORCE_LOOPS);
+                                       boost::none,
+                                       boost::none);
     }
     *real_weight_of_via_path = upper_bound_s_v_path_weight + upper_bound_of_v_t_path_weight;
 
@@ -351,8 +351,8 @@ bool viaNodeCandidatePassesTTest(SearchEngineData<Algorithm> &engine_working_dat
                                        *s_v_middle,
                                        upper_bound_s_v_path_weight,
                                        min_edge_offset,
-                                       DO_NOT_FORCE_LOOPS,
-                                       DO_NOT_FORCE_LOOPS);
+                                       boost::none,
+                                       boost::none);
     }
 
     if (INVALID_EDGE_WEIGHT == upper_bound_s_v_path_weight)
@@ -372,8 +372,8 @@ bool viaNodeCandidatePassesTTest(SearchEngineData<Algorithm> &engine_working_dat
                                        *v_t_middle,
                                        upper_bound_of_v_t_path_weight,
                                        min_edge_offset,
-                                       DO_NOT_FORCE_LOOPS,
-                                       DO_NOT_FORCE_LOOPS);
+                                       boost::none,
+                                       boost::none);
     }
 
     if (INVALID_EDGE_WEIGHT == upper_bound_of_v_t_path_weight)
@@ -545,8 +545,8 @@ bool viaNodeCandidatePassesTTest(SearchEngineData<Algorithm> &engine_working_dat
                                            middle,
                                            upper_bound,
                                            min_edge_offset,
-                                           DO_NOT_FORCE_LOOPS,
-                                           DO_NOT_FORCE_LOOPS);
+                                           boost::none,
+                                           boost::none);
         }
         if (!reverse_heap3.Empty())
         {
@@ -556,8 +556,8 @@ bool viaNodeCandidatePassesTTest(SearchEngineData<Algorithm> &engine_working_dat
                                            middle,
                                            upper_bound,
                                            min_edge_offset,
-                                           DO_NOT_FORCE_LOOPS,
-                                           DO_NOT_FORCE_LOOPS);
+                                           boost::none,
+                                           boost::none);
         }
     }
     return (upper_bound <= t_test_path_weight);
@@ -566,14 +566,11 @@ bool viaNodeCandidatePassesTTest(SearchEngineData<Algorithm> &engine_working_dat
 
 InternalManyRoutesResult alternativePathSearch(SearchEngineData<Algorithm> &engine_working_data,
                                                const DataFacade<Algorithm> &facade,
-                                               const PhantomNodes &phantom_node_pair,
+                                               const PhantomEndpointCandidates &endpoint_candidates,
                                                unsigned /*number_of_alternatives*/)
 {
     InternalRouteResult primary_route;
     InternalRouteResult secondary_route;
-
-    primary_route.segment_end_coordinates = {phantom_node_pair};
-    secondary_route.segment_end_coordinates = {phantom_node_pair};
 
     std::vector<NodeID> alternative_path;
     std::vector<NodeID> via_node_candidate_list;
@@ -592,15 +589,14 @@ InternalManyRoutesResult alternativePathSearch(SearchEngineData<Algorithm> &engi
 
     EdgeWeight upper_bound_to_shortest_path_weight = INVALID_EDGE_WEIGHT;
     NodeID middle_node = SPECIAL_NODEID;
-    const EdgeWeight min_edge_offset =
-        std::min(phantom_node_pair.source_phantom.forward_segment_id.enabled
-                     ? -phantom_node_pair.source_phantom.GetForwardWeightPlusOffset()
-                     : 0,
-                 phantom_node_pair.source_phantom.reverse_segment_id.enabled
-                     ? -phantom_node_pair.source_phantom.GetReverseWeightPlusOffset()
-                     : 0);
+    EdgeWeight min_edge_offset = 0;
+    std::for_each(endpoint_candidates.source_phantoms.begin(), endpoint_candidates.source_phantoms.end(), [&min_edge_offset] (const PhantomNode &phantom_node) {
+        if (phantom_node.IsValidForwardSource()) {
+            min_edge_offset = std::min(-phantom_node.GetForwardWeightPlusOffset(), min_edge_offset);
+        }
+    });
 
-    insertNodesInHeaps(forward_heap1, reverse_heap1, phantom_node_pair);
+    insertNodesInHeaps(forward_heap1, reverse_heap1, endpoint_candidates);
 
     // search from s and t till new_min/(1+epsilon) > weight_of_shortest_path
     while (0 < (forward_heap1.Size() + reverse_heap1.Size()))
@@ -790,7 +786,7 @@ InternalManyRoutesResult alternativePathSearch(SearchEngineData<Algorithm> &engi
                                         &v_t_middle,
                                         min_edge_offset))
         {
-            // select first admissable
+            // select first admissible
             selected_via_node = candidate.node;
             break;
         }
@@ -799,20 +795,41 @@ InternalManyRoutesResult alternativePathSearch(SearchEngineData<Algorithm> &engi
     // Unpack shortest path and alternative, if they exist
     if (INVALID_EDGE_WEIGHT != upper_bound_to_shortest_path_weight)
     {
+        boost::optional<PhantomNode> shortest_source;
+        for(const PhantomNode &source_phantom : endpoint_candidates.source_phantoms) {
+            if (packed_shortest_path.front() == source_phantom.forward_segment_id.id || packed_shortest_path.front() == source_phantom.reverse_segment_id.id) {
+                shortest_source = source_phantom;
+                break;
+           }
+        };
+        BOOST_ASSERT(shortest_source != boost::none);
+
+        boost::optional<PhantomNode> shortest_target;
+        for(const PhantomNode &target_phantom : endpoint_candidates.target_phantoms) {
+            if (packed_shortest_path.back() == target_phantom.forward_segment_id.id || packed_shortest_path.back() == target_phantom.reverse_segment_id.id) {
+                shortest_target = target_phantom;
+                break;
+            }
+        };
+        BOOST_ASSERT(shortest_target != boost::none);
+        PhantomNodes phantom_endpoints{*shortest_source, *shortest_target};
+
+        primary_route.segment_end_coordinates = {phantom_endpoints};
+
         BOOST_ASSERT(!packed_shortest_path.empty());
         primary_route.unpacked_path_segments.resize(1);
         primary_route.source_traversed_in_reverse.push_back(
             (packed_shortest_path.front() !=
-             phantom_node_pair.source_phantom.forward_segment_id.id));
+             phantom_endpoints.source_phantom.forward_segment_id.id));
         primary_route.target_traversed_in_reverse.push_back((
-            packed_shortest_path.back() != phantom_node_pair.target_phantom.forward_segment_id.id));
+            packed_shortest_path.back() != phantom_endpoints.target_phantom.forward_segment_id.id));
 
         unpackPath(facade,
                    // -- packed input
                    packed_shortest_path.begin(),
                    packed_shortest_path.end(),
                    // -- start of route
-                   phantom_node_pair,
+                   phantom_endpoints,
                    // -- unpacked output
                    primary_route.unpacked_path_segments.front());
         primary_route.shortest_path_weight = upper_bound_to_shortest_path_weight;
@@ -830,19 +847,40 @@ InternalManyRoutesResult alternativePathSearch(SearchEngineData<Algorithm> &engi
                                     v_t_middle,
                                     packed_alternate_path);
 
+        boost::optional<PhantomNode> shortest_source;
+        for(const PhantomNode &source_phantom : endpoint_candidates.source_phantoms) {
+            if (packed_alternate_path.front() == source_phantom.forward_segment_id.id || packed_alternate_path.front() == source_phantom.reverse_segment_id.id) {
+                shortest_source = source_phantom;
+                break;
+            }
+        };
+        BOOST_ASSERT(shortest_source != boost::none);
+
+        boost::optional<PhantomNode> shortest_target;
+        for(const PhantomNode &target_phantom : endpoint_candidates.target_phantoms) {
+            if (packed_alternate_path.back() == target_phantom.forward_segment_id.id || packed_alternate_path.back() == target_phantom.reverse_segment_id.id) {
+                shortest_target = target_phantom;
+                break;
+            }
+        };
+        BOOST_ASSERT(shortest_target != boost::none);
+        PhantomNodes phantom_endpoints{*shortest_source, *shortest_target};
+
+        secondary_route.segment_end_coordinates = {phantom_endpoints};
+
         secondary_route.unpacked_path_segments.resize(1);
         secondary_route.source_traversed_in_reverse.push_back(
             (packed_alternate_path.front() !=
-             phantom_node_pair.source_phantom.forward_segment_id.id));
+             phantom_endpoints.source_phantom.forward_segment_id.id));
         secondary_route.target_traversed_in_reverse.push_back(
             (packed_alternate_path.back() !=
-             phantom_node_pair.target_phantom.forward_segment_id.id));
+             phantom_endpoints.target_phantom.forward_segment_id.id));
 
         // unpack the alternate path
         unpackPath(facade,
                    packed_alternate_path.begin(),
                    packed_alternate_path.end(),
-                   phantom_node_pair,
+                   phantom_endpoints,
                    secondary_route.unpacked_path_segments.front());
 
         secondary_route.shortest_path_weight = weight_of_via_path;

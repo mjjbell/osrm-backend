@@ -141,7 +141,7 @@ class MatchAPI final : public RouteAPI
             }
             const auto &phantom =
                 sub_matchings[matching_index.sub_matching_index].nodes[matching_index.point_index];
-            auto waypoint = BaseAPI::MakeWaypoint(&fb_result, phantom);
+            auto waypoint = BaseAPI::MakeWaypoint(&fb_result, {phantom});
             waypoint->add_matchings_index(matching_index.sub_matching_index);
             waypoint->add_alternatives_count(sub_matchings[matching_index.sub_matching_index]
                                                  .alternatives_count[matching_index.point_index]);
@@ -195,7 +195,7 @@ class MatchAPI final : public RouteAPI
             }
             const auto &phantom =
                 sub_matchings[matching_index.sub_matching_index].nodes[matching_index.point_index];
-            auto waypoint = BaseAPI::MakeWaypoint(phantom);
+            auto waypoint = BaseAPI::MakeWaypoint({phantom});
             waypoint.values["matchings_index"] = matching_index.sub_matching_index;
             waypoint.values["waypoint_index"] = matching_index.point_index;
             waypoint.values["alternatives_count"] =

@@ -95,18 +95,88 @@ Status ViaRoutePlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithm
     }
     BOOST_ASSERT(phantom_node_pairs.size() == route_parameters.coordinates.size());
 
+    for (const auto &source_target_pair: phantom_node_pairs) {
+        std::cout << "pair has " << source_target_pair.first.size() << " first values" << std::endl;
+        for (const PhantomNode &phantom: source_target_pair.first) {
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_weight << "," << phantom.forward_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_weight << "," << phantom.reverse_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_distance << ","
+                          << phantom.forward_distance_offset << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_distance << ","
+                          << phantom.reverse_distance_offset << std::endl;
+                std::cout << phantom.component.id << " -> " << phantom.component.id << std::endl;
+        }
+        std::cout << "pair has " << source_target_pair.second.size() << " second values" << std::endl;
+        for (const PhantomNode &phantom : source_target_pair.second) {
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_weight << "," << phantom.forward_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_weight << "," << phantom.reverse_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_distance << ","
+                          << phantom.forward_distance_offset << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_distance << ","
+                          << phantom.reverse_distance_offset << std::endl;
+                std::cout << phantom.component.id << " -> " << phantom.component.id << std::endl;
+        }
+    }
+
     auto snapped_phantoms = SnapPhantomNodes(phantom_node_pairs);
 
-    std::vector<PhantomNodes> start_end_nodes;
-    auto build_phantom_pairs = [&start_end_nodes](const PhantomNode &first_node,
-                                                  const PhantomNode &second_node) {
-        start_end_nodes.push_back(PhantomNodes{first_node, second_node});
+    std::vector<PhantomEndpointCandidates> start_end_candidates;
+    auto build_phantom_pairs = [&start_end_candidates](const std::vector<PhantomNode> &first_nodes,
+                                                  const std::vector<PhantomNode> &second_nodes) {
+        start_end_candidates.push_back({first_nodes, second_nodes});
     };
     util::for_each_pair(snapped_phantoms, build_phantom_pairs);
+    std::cout << "Here are the phantom pairs " << std::endl;
+    for (const auto &perm: start_end_candidates) {
+        std::cout << "perm has " << perm.source_phantoms.size() << " source pairs" << std::endl;
+        for (const PhantomNode &phantom : perm.source_phantoms) {
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_weight << "," << phantom.forward_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_weight << "," << phantom.reverse_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_distance << ","
+                          << phantom.forward_distance_offset << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_distance << ","
+                          << phantom.reverse_distance_offset << std::endl;
+                std::cout << phantom.component.id << " -> " << phantom.component.id << std::endl;
+        }
+
+        std::cout << "perm has " << perm.target_phantoms.size() << " target pairs" << std::endl;
+
+        for (const PhantomNode &phantom : perm.target_phantoms) {
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_weight << "," << phantom.forward_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_weight << "," << phantom.reverse_weight_offset
+                          << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.forward_distance << ","
+                          << phantom.forward_distance_offset << std::endl;
+                std::cout << phantom.forward_segment_id.id << "," << phantom.reverse_segment_id.id
+                          << " : " << phantom.reverse_distance << ","
+                          << phantom.reverse_distance_offset << std::endl;
+                std::cout << phantom.component.id << " -> " << phantom.component.id << std::endl;
+        }
+    }
 
     api::RouteAPI route_api{facade, route_parameters};
-
-    InternalManyRoutesResult routes;
 
     // TODO: in v6 we should remove the boolean and only keep the number parameter.
     // For now just force them to be in sync. and keep backwards compatibility.
@@ -115,20 +185,21 @@ Status ViaRoutePlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithm
         (route_parameters.alternatives || route_parameters.number_of_alternatives > 0);
     const auto number_of_alternatives = std::max(1u, route_parameters.number_of_alternatives);
 
+    InternalManyRoutesResult routes;
     // Alternatives do not support vias, only direct s,t queries supported
     // See the implementation notes and high-level outline.
     // https://github.com/Project-OSRM/osrm-backend/issues/3905
-    if (1 == start_end_nodes.size() && algorithms.HasAlternativePathSearch() && wants_alternatives)
+    if (1 == start_end_candidates.size() && algorithms.HasAlternativePathSearch() && wants_alternatives)
     {
-        routes = algorithms.AlternativePathSearch(start_end_nodes.front(), number_of_alternatives);
+        routes = algorithms.AlternativePathSearch(start_end_candidates.front(), number_of_alternatives);
     }
-    else if (1 == start_end_nodes.size() && algorithms.HasDirectShortestPathSearch())
+    else if (1 == start_end_candidates.size() && algorithms.HasDirectShortestPathSearch())
     {
-        routes = algorithms.DirectShortestPathSearch(start_end_nodes.front());
+        routes = algorithms.DirectShortestPathSearch(start_end_candidates.front());
     }
     else
     {
-        routes = algorithms.ShortestPathSearch(start_end_nodes, route_parameters.continue_straight);
+        routes = algorithms.ShortestPathSearch(start_end_candidates, route_parameters.continue_straight);
     }
 
     // The post condition for all path searches is we have at least one route in our result.
@@ -160,15 +231,16 @@ Status ViaRoutePlugin::HandleRequest(const RoutingAlgorithmsInterface &algorithm
             }
         }
 
-        route_api.MakeResponse(routes, start_end_nodes, result);
+        route_api.MakeResponse(routes, start_end_candidates, result);
     }
     else
     {
-        auto first_component_id = snapped_phantoms.front().component.id;
+        std::cout << "IMPOSSIBLE!!!" << std::endl;
+        auto first_component_id = snapped_phantoms.front().front().component.id;
         auto not_in_same_component = std::any_of(snapped_phantoms.begin(),
                                                  snapped_phantoms.end(),
-                                                 [first_component_id](const PhantomNode &node) {
-                                                     return node.component.id != first_component_id;
+                                                 [first_component_id](const std::vector<PhantomNode> &node) {
+                                                     return node.front().component.id != first_component_id;
                                                  });
 
         if (not_in_same_component)

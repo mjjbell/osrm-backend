@@ -47,7 +47,7 @@ class RouteAPI : public BaseAPI
 
     void
     MakeResponse(const InternalManyRoutesResult &raw_routes,
-                 const std::vector<PhantomNodes>
+                 const std::vector<PhantomEndpointCandidates>
                      &all_start_end_points, // all used coordinates, ignoring waypoints= parameter
                  osrm::engine::api::ResultT &response) const
     {
@@ -67,7 +67,7 @@ class RouteAPI : public BaseAPI
 
     void
     MakeResponse(const InternalManyRoutesResult &raw_routes,
-                 const std::vector<PhantomNodes>
+                 const std::vector<PhantomEndpointCandidates>
                      &all_start_end_points, // all used coordinates, ignoring waypoints= parameter
                  flatbuffers::FlatBufferBuilder &fb_result) const
     {
@@ -93,7 +93,7 @@ class RouteAPI : public BaseAPI
 
     void
     MakeResponse(const InternalManyRoutesResult &raw_routes,
-                 const std::vector<PhantomNodes>
+                 const std::vector<PhantomEndpointCandidates>
                      &all_start_end_points, // all used coordinates, ignoring waypoints= parameter
                  util::json::Object &response) const
     {

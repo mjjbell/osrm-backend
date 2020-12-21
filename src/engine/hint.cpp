@@ -57,5 +57,24 @@ bool operator==(const Hint &lhs, const Hint &rhs)
 
 std::ostream &operator<<(std::ostream &out, const Hint &hint) { return out << hint.ToBase64(); }
 
+std::string ToBase64(const std::vector<Hint> &hints)
+{
+    std::string res;
+    for (const auto &hint : hints)
+    {
+        res += hint.ToBase64();
+    }
+    return res;
+}
+
+bool AreValidHints(const std::vector<Hint> &hints,
+                   const util::Coordinate new_input_coordinates,
+                   const datafacade::BaseDataFacade &facade)
+{
+    return std::all_of(hints.begin(), hints.end(), [&](const auto &hint) {
+        return hint.IsValid(new_input_coordinates, facade);
+    });
+}
+
 } // namespace engine
 } // namespace osrm

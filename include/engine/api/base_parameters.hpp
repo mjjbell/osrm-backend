@@ -77,7 +77,7 @@ struct BaseParameters
     };
 
     std::vector<util::Coordinate> coordinates;
-    std::vector<boost::optional<Hint>> hints;
+    std::vector<std::vector<Hint>> hints;
     std::vector<boost::optional<double>> radiuses;
     std::vector<boost::optional<Bearing>> bearings;
     std::vector<boost::optional<Approach>> approaches;
@@ -93,7 +93,7 @@ struct BaseParameters
     SnappingType snapping = SnappingType::Default;
 
     BaseParameters(const std::vector<util::Coordinate> coordinates_ = {},
-                   const std::vector<boost::optional<Hint>> hints_ = {},
+                   const std::vector<std::vector<Hint>> hints_ = {},
                    std::vector<boost::optional<double>> radiuses_ = {},
                    std::vector<boost::optional<Bearing>> bearings_ = {},
                    std::vector<boost::optional<Approach>> approaches_ = {},

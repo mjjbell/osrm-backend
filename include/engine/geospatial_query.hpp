@@ -22,10 +22,10 @@ namespace osrm
 namespace engine
 {
 
-inline std::pair<bool, bool> boolPairAnd(const std::pair<bool, bool> &A,
-                                         const std::pair<bool, bool> &B)
+inline std::pair<bool, bool> operator&&(const std::pair<bool, bool> &a,
+                                        const std::pair<bool, bool> &b)
 {
-    return std::make_pair(A.first && B.first, A.second && B.second);
+    return {a.first && b.first, a.second && b.second};
 }
 
 // Implements complex queries on top of an RTree and builds PhantomNodes from it.
@@ -48,153 +48,34 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
         return rtree.SearchInBox(bbox);
     }
 
-    // Returns nearest PhantomNodes in the given bearing range within max_distance.
-    // Does not filter by small/big component!
-    std::vector<PhantomNodeWithDistance>
-    NearestPhantomNodesInRange(const util::Coordinate input_coordinate,
-                               const double max_distance,
-                               const Approach approach,
-                               const bool use_all_edges) const
-    {
-        auto results = rtree.Nearest(
-            input_coordinate,
-            [this, approach, &input_coordinate, use_all_edges](const CandidateSegment &segment) {
-                return boolPairAnd(
-                    boolPairAnd(HasValidEdge(segment, use_all_edges), CheckSegmentExclude(segment)),
-                    CheckApproach(input_coordinate, segment, approach));
-            },
-            [this, max_distance, input_coordinate](const std::size_t,
-                                                   const CandidateSegment &segment) {
-                return CheckSegmentDistance(input_coordinate, segment, max_distance);
-            });
-
-        return MakePhantomNodes(input_coordinate, results);
-    }
-
-    // Returns nearest PhantomNodes in the given bearing range within max_distance.
-    // Does not filter by small/big component!
-    std::vector<PhantomNodeWithDistance>
-    NearestPhantomNodesInRange(const util::Coordinate input_coordinate,
-                               const double max_distance,
-                               const int bearing,
-                               const int bearing_range,
-                               const Approach approach,
-                               const bool use_all_edges) const
-    {
-        auto results = rtree.Nearest(
-            input_coordinate,
-            [this, approach, &input_coordinate, bearing, bearing_range, use_all_edges](
-                const CandidateSegment &segment) {
-                auto use_direction =
-                    boolPairAnd(CheckSegmentBearing(segment, bearing, bearing_range),
-                                boolPairAnd(HasValidEdge(segment, use_all_edges),
-                                            CheckSegmentExclude(segment)));
-                use_direction =
-                    boolPairAnd(use_direction, CheckApproach(input_coordinate, segment, approach));
-                return use_direction;
-            },
-            [this, max_distance, input_coordinate](const std::size_t,
-                                                   const CandidateSegment &segment) {
-                return CheckSegmentDistance(input_coordinate, segment, max_distance);
-            });
-
-        return MakePhantomNodes(input_coordinate, results);
-    }
-
-    // Returns max_results nearest PhantomNodes in the given bearing range.
-    // Does not filter by small/big component!
-    std::vector<PhantomNodeWithDistance>
-    NearestPhantomNodes(const util::Coordinate input_coordinate,
-                        const unsigned max_results,
-                        const int bearing,
-                        const int bearing_range,
-                        const Approach approach) const
-    {
-        auto results = rtree.Nearest(
-            input_coordinate,
-            [this, approach, &input_coordinate, bearing, bearing_range](
-                const CandidateSegment &segment) {
-                auto use_direction =
-                    boolPairAnd(CheckSegmentBearing(segment, bearing, bearing_range),
-                                boolPairAnd(HasValidEdge(segment), CheckSegmentExclude(segment)));
-                return boolPairAnd(use_direction,
-                                   CheckApproach(input_coordinate, segment, approach));
-            },
-            [max_results](const std::size_t num_results, const CandidateSegment &) {
-                return num_results >= max_results;
-            });
-
-        return MakePhantomNodes(input_coordinate, results);
-    }
-
     // Returns max_results nearest PhantomNodes in the given bearing range within the maximum
     // distance.
     // Does not filter by small/big component!
     std::vector<PhantomNodeWithDistance>
     NearestPhantomNodes(const util::Coordinate input_coordinate,
-                        const unsigned max_results,
-                        const double max_distance,
-                        const int bearing,
-                        const int bearing_range,
-                        const Approach approach) const
+                        const Approach approach,
+                        const boost::optional<size_t> max_results,
+                        const boost::optional<double> max_distance,
+                        const boost::optional<Bearing> bearing_with_range,
+                        const boost::optional<bool> use_all_edges) const
     {
         auto results = rtree.Nearest(
             input_coordinate,
-            [this, approach, &input_coordinate, bearing, bearing_range](
+            [this, approach, &input_coordinate, &bearing_with_range, &use_all_edges](
                 const CandidateSegment &segment) {
-                auto use_direction =
-                    boolPairAnd(CheckSegmentBearing(segment, bearing, bearing_range),
-                                boolPairAnd(HasValidEdge(segment), CheckSegmentExclude(segment)));
-                return boolPairAnd(use_direction,
-                                   CheckApproach(input_coordinate, segment, approach));
+                auto valid = CheckSegmentExclude(segment) &&
+                             CheckApproach(input_coordinate, segment, approach) &&
+                             (use_all_edges ? HasValidEdge(segment, *use_all_edges)
+                                            : HasValidEdge(segment)) &&
+                             (bearing_with_range ? CheckSegmentBearing(segment, *bearing_with_range)
+                                                 : std::make_pair(true, true));
+                return valid;
             },
-            [this, max_distance, max_results, input_coordinate](const std::size_t num_results,
-                                                                const CandidateSegment &segment) {
-                return num_results >= max_results ||
-                       CheckSegmentDistance(input_coordinate, segment, max_distance);
-            });
-
-        return MakePhantomNodes(input_coordinate, results);
-    }
-
-    // Returns max_results nearest PhantomNodes.
-    // Does not filter by small/big component!
-    std::vector<PhantomNodeWithDistance>
-    NearestPhantomNodes(const util::Coordinate input_coordinate,
-                        const unsigned max_results,
-                        const Approach approach) const
-    {
-        auto results = rtree.Nearest(
-            input_coordinate,
-            [this, approach, &input_coordinate](const CandidateSegment &segment) {
-                return boolPairAnd(boolPairAnd(HasValidEdge(segment), CheckSegmentExclude(segment)),
-                                   CheckApproach(input_coordinate, segment, approach));
-            },
-            [max_results](const std::size_t num_results, const CandidateSegment &) {
-                return num_results >= max_results;
-            });
-
-        return MakePhantomNodes(input_coordinate, results);
-    }
-
-    // Returns max_results nearest PhantomNodes in the given max distance.
-    // Does not filter by small/big component!
-    std::vector<PhantomNodeWithDistance>
-    NearestPhantomNodes(const util::Coordinate input_coordinate,
-                        const unsigned max_results,
-                        const double max_distance,
-                        const Approach approach) const
-    {
-        auto results = rtree.Nearest(
-            input_coordinate,
-            [this, approach, &input_coordinate](const CandidateSegment &segment) {
-                return boolPairAnd(boolPairAnd(HasValidEdge(segment), CheckSegmentExclude(segment)),
-                                   CheckApproach(input_coordinate, segment, approach));
-            },
-            [this, max_distance, max_results, input_coordinate](const std::size_t num_results,
-                                                                const CandidateSegment &segment) {
-                return num_results >= max_results ||
-                       CheckSegmentDistance(input_coordinate, segment, max_distance);
+            [this, &max_distance, &max_results, input_coordinate](const std::size_t num_results,
+                                                                  const CandidateSegment &segment) {
+                return (max_results && num_results >= *max_results) ||
+                       (max_distance &&
+                        CheckSegmentDistance(input_coordinate, segment, *max_distance));
             });
 
         return MakePhantomNodes(input_coordinate, results);
@@ -202,236 +83,147 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
 
     // Returns the nearest phantom node. If this phantom node is not from a big component
     // a second phantom node is return that is the nearest coordinate in a big component.
-    std::pair<PhantomNode, PhantomNode>
-    NearestPhantomNodeWithAlternativeFromBigComponent(const util::Coordinate input_coordinate,
-                                                      const double max_distance,
-                                                      const Approach approach,
-                                                      const bool use_all_edges) const
+    PhantomCandidateAlternatives NearestCandidatesWithAlternativeFromBigComponent(
+        const util::Coordinate input_coordinate,
+        const Approach approach,
+        const boost::optional<double> max_distance,
+        const boost::optional<Bearing> bearing_with_range,
+        const boost::optional<bool> use_all_edges) const
     {
-        bool has_small_component = false;
+        bool has_nearest = false;
         bool has_big_component = false;
+        Coordinate big_component_coord;
+        double big_component_distance = std::numeric_limits<double>::max();
+        Coordinate nearest_coord;
         auto results = rtree.Nearest(
             input_coordinate,
             [this,
              approach,
              &input_coordinate,
+             &has_nearest,
              &has_big_component,
-             &has_small_component,
-             &use_all_edges](const CandidateSegment &segment) {
-                auto use_segment =
-                    (!has_small_component || (!has_big_component && !IsTinyComponent(segment)));
-                auto use_directions = std::make_pair(use_segment, use_segment);
-                const auto valid_edges = HasValidEdge(segment, use_all_edges);
-                const auto admissible_segments = CheckSegmentExclude(segment);
-                use_directions = boolPairAnd(use_directions, admissible_segments);
-                use_directions = boolPairAnd(use_directions, valid_edges);
-                use_directions =
-                    boolPairAnd(use_directions, CheckApproach(input_coordinate, segment, approach));
-
-                if (use_directions.first || use_directions.second)
+             &nearest_coord,
+             &big_component_coord,
+             &big_component_distance,
+             &use_all_edges,
+             &bearing_with_range](const CandidateSegment &segment) {
+                auto is_big_component = !IsTinyComponent(segment);
+                auto not_nearest =
+                    has_nearest && segment.fixed_projected_coordinate != nearest_coord;
+                auto not_big = has_big_component && is_big_component &&
+                               segment.fixed_projected_coordinate != big_component_coord;
+                if (not_nearest && not_big)
                 {
-                    has_big_component = has_big_component || !IsTinyComponent(segment);
-                    has_small_component = has_small_component || IsTinyComponent(segment);
+                    return std::make_pair(false, false);
                 }
+                auto use_candidate =
+                    CheckSegmentExclude(segment) &&
+                    CheckApproach(input_coordinate, segment, approach) &&
+                    (use_all_edges ? HasValidEdge(segment, *use_all_edges)
+                                   : HasValidEdge(segment)) &&
+                    (bearing_with_range ? CheckSegmentBearing(segment, *bearing_with_range)
+                                        : std::make_pair(true, true));
 
-                return use_directions;
-            },
-            [this, &has_big_component, max_distance, input_coordinate](
-                const std::size_t num_results, const CandidateSegment &segment) {
-                return (num_results > 0 && has_big_component) ||
-                       CheckSegmentDistance(input_coordinate, segment, max_distance);
-            });
-
-        if (results.size() == 0)
-        {
-            return std::make_pair(PhantomNode{}, PhantomNode{});
-        }
-
-        BOOST_ASSERT(results.size() == 1 || results.size() == 2);
-        return std::make_pair(MakePhantomNode(input_coordinate, results.front()).phantom_node,
-                              MakePhantomNode(input_coordinate, results.back()).phantom_node);
-    }
-
-    // Returns the nearest phantom node. If this phantom node is not from a big component
-    // a second phantom node is return that is the nearest coordinate in a big component.
-    std::pair<PhantomNode, PhantomNode>
-    NearestPhantomNodeWithAlternativeFromBigComponent(const util::Coordinate input_coordinate,
-                                                      const Approach approach,
-                                                      const bool use_all_edges) const
-    {
-        bool has_small_component = false;
-        bool has_big_component = false;
-        auto results = rtree.Nearest(
-            input_coordinate,
-            [this,
-             approach,
-             &input_coordinate,
-             &has_big_component,
-             &has_small_component,
-             &use_all_edges](const CandidateSegment &segment) {
-                auto use_segment =
-                    (!has_small_component || (!has_big_component && !IsTinyComponent(segment)));
-                auto use_directions = std::make_pair(use_segment, use_segment);
-
-                const auto valid_edges = HasValidEdge(segment, use_all_edges);
-                const auto admissible_segments = CheckSegmentExclude(segment);
-                use_directions = boolPairAnd(use_directions, admissible_segments);
-                use_directions = boolPairAnd(use_directions, valid_edges);
-                use_directions =
-                    boolPairAnd(use_directions, CheckApproach(input_coordinate, segment, approach));
-
-                if (use_directions.first || use_directions.second)
+                if (use_candidate.first || use_candidate.second)
                 {
-                    has_big_component = has_big_component || !IsTinyComponent(segment);
-                    has_small_component = has_small_component || IsTinyComponent(segment);
-                }
-
-                return use_directions;
-            },
-            [&has_big_component](const std::size_t num_results, const CandidateSegment &) {
-                return num_results > 0 && has_big_component;
-            });
-
-        if (results.size() == 0)
-        {
-            return std::make_pair(PhantomNode{}, PhantomNode{});
-        }
-
-        BOOST_ASSERT(results.size() == 1 || results.size() == 2);
-        return std::make_pair(MakePhantomNode(input_coordinate, results.front()).phantom_node,
-                              MakePhantomNode(input_coordinate, results.back()).phantom_node);
-    }
-
-    // Returns the nearest phantom node. If this phantom node is not from a big component
-    // a second phantom node is return that is the nearest coordinate in a big component.
-    std::pair<PhantomNode, PhantomNode>
-    NearestPhantomNodeWithAlternativeFromBigComponent(const util::Coordinate input_coordinate,
-                                                      const int bearing,
-                                                      const int bearing_range,
-                                                      const Approach approach,
-                                                      const bool use_all_edges) const
-    {
-        bool has_small_component = false;
-        bool has_big_component = false;
-        auto results = rtree.Nearest(
-            input_coordinate,
-            [this,
-             approach,
-             &input_coordinate,
-             bearing,
-             bearing_range,
-             &has_big_component,
-             &has_small_component,
-             &use_all_edges](const CandidateSegment &segment) {
-                auto use_segment =
-                    (!has_small_component || (!has_big_component && !IsTinyComponent(segment)));
-                auto use_directions = std::make_pair(use_segment, use_segment);
-                const auto admissible_segments = CheckSegmentExclude(segment);
-
-                if (use_segment)
-                {
-                    use_directions =
-                        boolPairAnd(CheckSegmentBearing(segment, bearing, bearing_range),
-                                    HasValidEdge(segment, use_all_edges));
-                    use_directions = boolPairAnd(use_directions, admissible_segments);
-                    use_directions = boolPairAnd(
-                        use_directions, CheckApproach(input_coordinate, segment, approach));
-
-                    if (use_directions.first || use_directions.second)
+                    if (!has_nearest)
                     {
-                        has_big_component = has_big_component || !IsTinyComponent(segment);
-                        has_small_component = has_small_component || IsTinyComponent(segment);
+                        has_nearest = true;
+                        nearest_coord = segment.fixed_projected_coordinate;
+                    }
+                    if (is_big_component && !has_big_component)
+                    {
+                        has_big_component = true;
+                        big_component_coord = segment.fixed_projected_coordinate;
+                        big_component_distance = GetSegmentDistance(input_coordinate, segment);
                     }
                 }
 
-                return use_directions;
+                return use_candidate;
             },
-            [&has_big_component](const std::size_t num_results, const CandidateSegment &) {
-                return num_results > 0 && has_big_component;
-            });
-
-        if (results.size() == 0)
-        {
-            return std::make_pair(PhantomNode{}, PhantomNode{});
-        }
-
-        BOOST_ASSERT(results.size() > 0);
-        return std::make_pair(MakePhantomNode(input_coordinate, results.front()).phantom_node,
-                              MakePhantomNode(input_coordinate, results.back()).phantom_node);
-    }
-
-    // Returns the nearest phantom node. If this phantom node is not from a big component
-    // a second phantom node is return that is the nearest coordinate in a big component.
-    std::pair<PhantomNode, PhantomNode>
-    NearestPhantomNodeWithAlternativeFromBigComponent(const util::Coordinate input_coordinate,
-                                                      const double max_distance,
-                                                      const int bearing,
-                                                      const int bearing_range,
-                                                      const Approach approach,
-                                                      const bool use_all_edges) const
-    {
-        bool has_small_component = false;
-        bool has_big_component = false;
-        auto results = rtree.Nearest(
-            input_coordinate,
             [this,
-             approach,
-             &input_coordinate,
-             bearing,
-             bearing_range,
              &has_big_component,
-             &has_small_component,
-             &use_all_edges](const CandidateSegment &segment) {
-                auto use_segment =
-                    (!has_small_component || (!has_big_component && !IsTinyComponent(segment)));
-                auto use_directions = std::make_pair(use_segment, use_segment);
-                const auto admissible_segments = CheckSegmentExclude(segment);
-
-                if (use_segment)
-                {
-                    use_directions =
-                        boolPairAnd(CheckSegmentBearing(segment, bearing, bearing_range),
-                                    HasValidEdge(segment, use_all_edges));
-                    use_directions = boolPairAnd(use_directions, admissible_segments);
-                    use_directions = boolPairAnd(
-                        use_directions, CheckApproach(input_coordinate, segment, approach));
-
-                    if (use_directions.first || use_directions.second)
-                    {
-                        has_big_component = has_big_component || !IsTinyComponent(segment);
-                        has_small_component = has_small_component || IsTinyComponent(segment);
-                    }
-                }
-
-                return use_directions;
-            },
-            [this, &has_big_component, max_distance, input_coordinate](
-                const std::size_t num_results, const CandidateSegment &segment) {
-                return (num_results > 0 && has_big_component) ||
-                       CheckSegmentDistance(input_coordinate, segment, max_distance);
+             &big_component_coord,
+             &max_distance,
+             input_coordinate,
+             &big_component_distance](const std::size_t /*num_results*/,
+                                      const CandidateSegment &segment) {
+                auto distance = GetSegmentDistance(input_coordinate, segment);
+                auto further_than_big_component = distance > big_component_distance;
+                auto no_more_candidates = has_big_component && further_than_big_component;
+                auto too_far_away = max_distance && distance > *max_distance;
+                return no_more_candidates || too_far_away;
             });
 
-        if (results.size() == 0)
-        {
-            return std::make_pair(PhantomNode{}, PhantomNode{});
-        }
-
-        BOOST_ASSERT(results.size() > 0);
-        return std::make_pair(MakePhantomNode(input_coordinate, results.front()).phantom_node,
-                              MakePhantomNode(input_coordinate, results.back()).phantom_node);
+        return MakeAlternativeBigCandidates(
+            input_coordinate, nearest_coord, big_component_coord, results);
     }
 
   private:
+    PhantomCandidateAlternatives
+    MakeAlternativeBigCandidates(const util::Coordinate input_coordinate,
+                                 const Coordinate nearest_coord,
+                                 const Coordinate big_coord,
+                                 const std::vector<CandidateSegment> &results) const
+    {
+        if (results.size() == 0)
+        {
+            return std::make_pair(PhantomNodeCandidates{}, PhantomNodeCandidates{});
+        }
+
+        PhantomNodeCandidates nearest_phantoms;
+        PhantomNodeCandidates big_component_phantoms;
+
+        const auto add_to_candidates = [this, &input_coordinate](PhantomNodeCandidates &candidates,
+                                                                 const EdgeData data) {
+            auto candidate_it =
+                std::find_if(candidates.begin(), candidates.end(), [&](const PhantomNode &node) {
+                    return data.forward_segment_id.id == node.forward_segment_id.id &&
+                           data.reverse_segment_id.id == node.reverse_segment_id.id;
+                });
+            if (candidate_it == candidates.end())
+            {
+                candidates.emplace_back(MakePhantomNode(input_coordinate, data).phantom_node);
+            }
+            else
+            {
+                if (candidate_it->forward_segment_id.enabled == data.forward_segment_id.enabled)
+                {
+                    if (data.fwd_segment_position < candidate_it->fwd_segment_position)
+                    {
+                        *candidate_it = MakePhantomNode(input_coordinate, data).phantom_node;
+                    }
+                }
+                else if (data.forward_segment_id.enabled)
+                {
+                    *candidate_it = MakePhantomNode(input_coordinate, data).phantom_node;
+                }
+            }
+        };
+
+        std::for_each(results.begin(), results.end(), [&](const CandidateSegment &segment) {
+            if (segment.fixed_projected_coordinate == nearest_coord)
+            {
+                add_to_candidates(nearest_phantoms, segment.data);
+            }
+            else if (segment.fixed_projected_coordinate == big_coord && !IsTinyComponent(segment))
+            {
+                add_to_candidates(big_component_phantoms, segment.data);
+            }
+        });
+        return std::make_pair(nearest_phantoms, big_component_phantoms);
+    }
+
     std::vector<PhantomNodeWithDistance>
     MakePhantomNodes(const util::Coordinate input_coordinate,
-                     const std::vector<EdgeData> &results) const
+                     const std::vector<CandidateSegment> &results) const
     {
         std::vector<PhantomNodeWithDistance> distance_and_phantoms(results.size());
         std::transform(results.begin(),
                        results.end(),
                        distance_and_phantoms.begin(),
-                       [this, &input_coordinate](const EdgeData &data) {
-                           return MakePhantomNode(input_coordinate, data);
+                       [this, &input_coordinate](const CandidateSegment &segment) {
+                           return MakePhantomNode(input_coordinate, segment.data);
                        });
         return distance_and_phantoms;
     }
@@ -578,9 +370,8 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
         return transformed;
     }
 
-    bool CheckSegmentDistance(const Coordinate input_coordinate,
-                              const CandidateSegment &segment,
-                              const double max_distance) const
+    double GetSegmentDistance(const Coordinate input_coordinate,
+                              const CandidateSegment &segment) const
     {
         BOOST_ASSERT(segment.data.forward_segment_id.id != SPECIAL_SEGMENTID ||
                      !segment.data.forward_segment_id.enabled);
@@ -590,8 +381,14 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
         Coordinate wsg84_coordinate =
             util::web_mercator::toWGS84(segment.fixed_projected_coordinate);
 
-        return util::coordinate_calculation::haversineDistance(input_coordinate, wsg84_coordinate) >
-               max_distance;
+        return util::coordinate_calculation::haversineDistance(input_coordinate, wsg84_coordinate);
+    }
+
+    bool CheckSegmentDistance(const Coordinate input_coordinate,
+                              const CandidateSegment &segment,
+                              const double max_distance) const
+    {
+        return GetSegmentDistance(input_coordinate, segment) > max_distance;
     }
 
     std::pair<bool, bool> CheckSegmentExclude(const CandidateSegment &segment) const
@@ -614,8 +411,7 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
     }
 
     std::pair<bool, bool> CheckSegmentBearing(const CandidateSegment &segment,
-                                              const int filter_bearing,
-                                              const int filter_bearing_range) const
+                                              const Bearing filter_bearing) const
     {
         BOOST_ASSERT(segment.data.forward_segment_id.id != SPECIAL_SEGMENTID ||
                      !segment.data.forward_segment_id.enabled);
@@ -631,11 +427,11 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
 
         const bool forward_bearing_valid =
             util::bearing::CheckInBounds(
-                std::round(forward_edge_bearing), filter_bearing, filter_bearing_range) &&
+                std::round(forward_edge_bearing), filter_bearing.bearing, filter_bearing.range) &&
             segment.data.forward_segment_id.enabled;
         const bool backward_bearing_valid =
             util::bearing::CheckInBounds(
-                std::round(backward_edge_bearing), filter_bearing, filter_bearing_range) &&
+                std::round(backward_edge_bearing), filter_bearing.bearing, filter_bearing.range) &&
             segment.data.reverse_segment_id.enabled;
         return std::make_pair(forward_bearing_valid, backward_bearing_valid);
     }
@@ -643,7 +439,7 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
     /**
      * Checks to see if the edge weights are valid.  We might have an edge,
      * but a traffic update might set the speed to 0 (weight == INVALID_SEGMENT_WEIGHT).
-     * which means that this edge is not currently traversible.  If this is the case,
+     * which means that this edge is not currently traversable.  If this is the case,
      * then we shouldn't snap to this edge.
      */
     std::pair<bool, bool> HasValidEdge(const CandidateSegment &segment,
@@ -680,7 +476,7 @@ template <typename RTreeT, typename DataFacadeT> class GeospatialQuery
     bool IsTinyComponent(const CandidateSegment &segment) const
     {
         const auto &data = segment.data;
-        BOOST_ASSERT(data.forward_segment_id.enabled);
+        BOOST_ASSERT(data.forward_segment_id.enabled || data.reverse_segment_id.enabled);
         BOOST_ASSERT(data.forward_segment_id.id != SPECIAL_NODEID);
         return datafacade.GetComponentID(data.forward_segment_id.id).is_tiny;
     }

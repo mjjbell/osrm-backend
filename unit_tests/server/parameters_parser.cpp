@@ -19,6 +19,13 @@
 #define CHECK_EQUAL_RANGE(R1, R2)                                                                  \
     BOOST_CHECK_EQUAL_COLLECTIONS(R1.begin(), R1.end(), R2.begin(), R2.end());
 
+#define CHECK_EQUAL_RANGE_OF_RANGE(R1, R2)                                                         \
+    BOOST_REQUIRE_EQUAL(R1.size(), R2.size());                                                     \
+    for (const auto i : util::irange<std::size_t>(0UL, R1.size()))                                 \
+    {                                                                                              \
+        BOOST_CHECK_EQUAL_COLLECTIONS(R1[i].begin(), R1[i].end(), R2[i].begin(), R2[i].end());     \
+    }
+
 BOOST_AUTO_TEST_SUITE(api_parameters_parser)
 
 using namespace osrm;
@@ -147,7 +154,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_1.radiuses, result_1->radiuses);
     CHECK_EQUAL_RANGE(reference_1.approaches, result_1->approaches);
     CHECK_EQUAL_RANGE(reference_1.coordinates, result_1->coordinates);
-    CHECK_EQUAL_RANGE(reference_1.hints, result_1->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_1.hints, result_1->hints);
 
     RouteParameters reference_2{};
     reference_2.alternatives = true;
@@ -170,7 +177,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_2.radiuses, result_2->radiuses);
     CHECK_EQUAL_RANGE(reference_2.approaches, result_2->approaches);
     CHECK_EQUAL_RANGE(reference_2.coordinates, result_2->coordinates);
-    CHECK_EQUAL_RANGE(reference_2.hints, result_2->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_2.hints, result_2->hints);
     BOOST_CHECK_EQUAL(result_2->annotations_type == RouteParameters::AnnotationsType::All, true);
 
     RouteParameters reference_3{false,
@@ -195,14 +202,14 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_3.radiuses, result_3->radiuses);
     CHECK_EQUAL_RANGE(reference_3.approaches, result_3->approaches);
     CHECK_EQUAL_RANGE(reference_3.coordinates, result_3->coordinates);
-    CHECK_EQUAL_RANGE(reference_3.hints, result_3->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_3.hints, result_3->hints);
 
     engine::PhantomNode phantom_1;
     phantom_1.input_location = coords_1[0];
     engine::PhantomNode phantom_2;
     phantom_2.input_location = coords_1[1];
-    std::vector<boost::optional<engine::Hint>> hints_4 = {engine::Hint{phantom_1, 0x1337},
-                                                          engine::Hint{phantom_2, 0x1337}};
+    std::vector<std::vector<engine::Hint>> hints_4 = {{engine::Hint{phantom_1, 0x1337}},
+                                                      {engine::Hint{phantom_2, 0x1337}}};
     RouteParameters reference_4{false,
                                 false,
                                 false,
@@ -214,7 +221,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
                                 std::vector<boost::optional<double>>{},
                                 std::vector<boost::optional<engine::Bearing>>{}};
     auto result_4 = parseParameters<RouteParameters>(
-        "1,2;3,4?steps=false&hints=" + hints_4[0]->ToBase64() + ";" + hints_4[1]->ToBase64());
+        "1,2;3,4?steps=false&hints=" + hintsToBase64(hints_4[0]) + ";" + hintsToBase64(hints_4[1]));
     BOOST_CHECK(result_4);
     BOOST_CHECK_EQUAL(reference_4.steps, result_4->steps);
     BOOST_CHECK_EQUAL(reference_4.alternatives, result_4->alternatives);
@@ -226,7 +233,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_4.radiuses, result_4->radiuses);
     CHECK_EQUAL_RANGE(reference_4.approaches, result_4->approaches);
     CHECK_EQUAL_RANGE(reference_4.coordinates, result_4->coordinates);
-    CHECK_EQUAL_RANGE(reference_4.hints, result_4->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_4.hints, result_4->hints);
 
     std::vector<boost::optional<engine::Bearing>> bearings_4 = {
         boost::none,
@@ -240,7 +247,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
                                 RouteParameters::OverviewType::Simplified,
                                 boost::optional<bool>{},
                                 coords_1,
-                                std::vector<boost::optional<engine::Hint>>{},
+                                std::vector<std::vector<engine::Hint>>{},
                                 std::vector<boost::optional<double>>{},
                                 bearings_4};
     auto result_5 = parseParameters<RouteParameters>("1,2;3,4?steps=false&bearings=;200,10;100,5");
@@ -255,7 +262,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_5.radiuses, result_5->radiuses);
     CHECK_EQUAL_RANGE(reference_5.approaches, result_5->approaches);
     CHECK_EQUAL_RANGE(reference_5.coordinates, result_5->coordinates);
-    CHECK_EQUAL_RANGE(reference_5.hints, result_5->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_5.hints, result_5->hints);
 
     std::vector<util::Coordinate> coords_2 = {{util::FloatLongitude{0}, util::FloatLatitude{1}},
                                               {util::FloatLongitude{2}, util::FloatLatitude{3}},
@@ -275,7 +282,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_6.radiuses, result_6->radiuses);
     CHECK_EQUAL_RANGE(reference_6.approaches, result_6->approaches);
     CHECK_EQUAL_RANGE(reference_6.coordinates, result_6->coordinates);
-    CHECK_EQUAL_RANGE(reference_6.hints, result_6->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_6.hints, result_6->hints);
 
     auto result_7 = parseParameters<RouteParameters>("1,2;3,4?radiuses=;unlimited");
     RouteParameters reference_7{};
@@ -293,7 +300,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_7.radiuses, result_7->radiuses);
     CHECK_EQUAL_RANGE(reference_7.approaches, result_7->approaches);
     CHECK_EQUAL_RANGE(reference_7.coordinates, result_7->coordinates);
-    CHECK_EQUAL_RANGE(reference_7.hints, result_7->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_7.hints, result_7->hints);
 
     auto result_8 = parseParameters<RouteParameters>("1,2;3,4?radiuses=;");
     RouteParameters reference_8{};
@@ -319,8 +326,8 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     phantom_3.input_location = coords_3[0];
     engine::PhantomNode phantom_4;
     phantom_4.input_location = coords_3[2];
-    std::vector<boost::optional<engine::Hint>> hints_10 = {
-        engine::Hint{phantom_3, 0x1337}, boost::none, engine::Hint{phantom_4, 0x1337}, boost::none};
+    std::vector<std::vector<engine::Hint>> hints_10 = {
+        {engine::Hint{phantom_3, 0x1337}}, {}, {engine::Hint{phantom_4, 0x1337}}, {}};
 
     RouteParameters reference_10{false,
                                  false,
@@ -333,8 +340,8 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
                                  std::vector<boost::optional<double>>{},
                                  std::vector<boost::optional<engine::Bearing>>{}};
     auto result_10 = parseParameters<RouteParameters>(
-        "1,2;3,4;5,6;7,8?steps=false&hints=" + hints_10[0]->ToBase64() + ";;" +
-        hints_10[2]->ToBase64() + ";");
+        "1,2;3,4;5,6;7,8?steps=false&hints=" + hintsToBase64(hints_10[0]) + ";;" +
+        hintsToBase64(hints_10[2]) + ";");
     BOOST_CHECK(result_10);
     BOOST_CHECK_EQUAL(reference_10.steps, result_10->steps);
     BOOST_CHECK_EQUAL(reference_10.alternatives, result_10->alternatives);
@@ -346,7 +353,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_10.radiuses, result_10->radiuses);
     CHECK_EQUAL_RANGE(reference_10.approaches, result_10->approaches);
     CHECK_EQUAL_RANGE(reference_10.coordinates, result_10->coordinates);
-    CHECK_EQUAL_RANGE(reference_10.hints, result_10->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_10.hints, result_10->hints);
 
     // Do not generate Hints when they are explicitly disabled
     auto result_11 = parseParameters<RouteParameters>("1,2;3,4?generate_hints=false");
@@ -441,7 +448,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
                                  RouteParameters::OverviewType::Simplified,
                                  boost::optional<bool>{},
                                  coords_3,
-                                 std::vector<boost::optional<engine::Hint>>{},
+                                 std::vector<std::vector<engine::Hint>>{},
                                  std::vector<boost::optional<double>>{},
                                  std::vector<boost::optional<engine::Bearing>>{},
                                  approaches_18};
@@ -459,7 +466,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_18.radiuses, result_18->radiuses);
     CHECK_EQUAL_RANGE(reference_18.approaches, result_18->approaches);
     CHECK_EQUAL_RANGE(reference_18.coordinates, result_18->coordinates);
-    CHECK_EQUAL_RANGE(reference_18.hints, result_18->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_18.hints, result_18->hints);
 
     RouteParameters reference_19{};
     reference_19.alternatives = true;
@@ -478,7 +485,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_19.radiuses, result_19->radiuses);
     CHECK_EQUAL_RANGE(reference_19.approaches, result_19->approaches);
     CHECK_EQUAL_RANGE(reference_19.coordinates, result_19->coordinates);
-    CHECK_EQUAL_RANGE(reference_19.hints, result_19->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_19.hints, result_19->hints);
 
     RouteParameters reference_20{};
     reference_20.alternatives = false;
@@ -497,7 +504,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_20.radiuses, result_20->radiuses);
     CHECK_EQUAL_RANGE(reference_20.approaches, result_20->approaches);
     CHECK_EQUAL_RANGE(reference_20.coordinates, result_20->coordinates);
-    CHECK_EQUAL_RANGE(reference_20.hints, result_20->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_20.hints, result_20->hints);
 
     // exclude flags
     RouteParameters reference_21{};
@@ -516,7 +523,7 @@ BOOST_AUTO_TEST_CASE(valid_route_urls)
     CHECK_EQUAL_RANGE(reference_21.radiuses, result_21->radiuses);
     CHECK_EQUAL_RANGE(reference_21.approaches, result_21->approaches);
     CHECK_EQUAL_RANGE(reference_21.coordinates, result_21->coordinates);
-    CHECK_EQUAL_RANGE(reference_21.hints, result_21->hints);
+    CHECK_EQUAL_RANGE_OF_RANGE(reference_21.hints, result_21->hints);
     CHECK_EQUAL_RANGE(reference_21.exclude, result_21->exclude);
 }
 

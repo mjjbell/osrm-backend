@@ -1,4 +1,8 @@
 # Unreleased
+  - Changes from 5.24.0
+    - Features
+      - ADDED: Support snapping to multiple ways at an input location. [#5953](https://github.com/Project-OSRM/osrm-backend/pull/5953)
+      - CHANGED: Breaking change to libosrm `hints` parameter. It now takes a vector of `Hint` objects for each request coordinate. [#5953](https://github.com/Project-OSRM/osrm-backend/pull/5953)
 
 # 5.24.0
   - Changes from 5.23.0

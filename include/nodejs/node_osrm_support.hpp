@@ -602,7 +602,7 @@ inline bool argumentsToParameter(const Nan::FunctionCallbackInfo<v8::Value> &arg
                     return false;
                 }
 
-                params->hints.push_back(osrm::engine::Hint::FromBase64(*Nan::Utf8String(hint)));
+                params->hints.push_back(osrm::engine::base64ToHints(*Nan::Utf8String(hint)));
             }
             else if (hint->IsNull())
             {

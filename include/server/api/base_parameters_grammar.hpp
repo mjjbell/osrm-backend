@@ -78,14 +78,20 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
         : BaseParametersGrammar::base_type(root_rule)
     {
         const auto add_hint = [](engine::api::BaseParameters &base_parameters,
-                                 const boost::optional<std::string> &hint_string) {
-            if (hint_string)
+                                 const std::vector<std::string> &hint_strings) {
+            if (!hint_strings.empty())
             {
-                base_parameters.hints.emplace_back(engine::Hint::FromBase64(hint_string.get()));
+                std::vector<engine::Hint> location_hints(hint_strings.size());
+                std::transform(
+                    hint_strings.begin(),
+                    hint_strings.end(),
+                    location_hints.begin(),
+                    [](const auto &hint_string) { return engine::Hint::FromBase64(hint_string); });
+                base_parameters.hints.push_back(std::move(location_hints));
             }
             else
             {
-                base_parameters.hints.emplace_back(boost::none);
+                base_parameters.hints.emplace_back();
             }
         };
 
@@ -146,7 +152,7 @@ struct BaseParametersGrammar : boost::spirit::qi::grammar<Iterator, Signature>
                          ';')[ph::bind(&engine::api::BaseParameters::radiuses, qi::_r1) = qi::_1];
 
         hints_rule = qi::lit("hints=") >
-                     (-qi::as_string[qi::repeat(engine::ENCODED_HINT_SIZE)[base64_char]])[ph::bind(
+                     (*qi::as_string[qi::repeat(engine::ENCODED_HINT_SIZE)[base64_char]])[ph::bind(
                          add_hint, qi::_r1, qi::_1)] %
                          ';';
 

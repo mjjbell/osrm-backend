@@ -2,6 +2,9 @@
   - Changes from 5.25.0
     - Features
       - FIXED: Completed support for no_entry and no_exit turn restrictions. [#5988](https://github.com/Project-OSRM/osrm-backend/pull/5988)
+      - ADDED: Support snapping to multiple ways at an input location. [#5953](https://github.com/Project-OSRM/osrm-backend/pull/5953)
+      - CHANGED: Breaking change to libosrm `hints` parameter. It now takes a vector of `Hint` objects for each request coordinate. [#5953](https://github.com/Project-OSRM/osrm-backend/pull/5953)
+
 # 5.25.0
   - Changes from 5.24.0
     - Build:

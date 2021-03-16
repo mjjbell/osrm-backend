@@ -88,6 +88,7 @@ template <storage::Ownership Ownership> class CellStorageImpl
         WeightPtrT const weights;
         DurationPtrT const durations;
         DistancePtrT const distances;
+        WeightPtrT const eccentricities;
         const NodeID *const source_boundary;
         const NodeID *const destination_boundary;
 
@@ -176,6 +177,14 @@ template <storage::Ownership Ownership> class CellStorageImpl
 
         auto GetOutDistance(NodeID node) const { return GetOutRange(distances, node); }
 
+        WeightPtrT GetEccentricity(NodeID node) const {
+            auto iter = std::find(source_boundary, source_boundary + num_source_nodes, node);
+            if (iter == source_boundary + num_source_nodes)
+                return nullptr;
+
+            return eccentricities + std::distance(source_boundary, iter);
+        }
+
         auto GetSourceNodes() const
         {
             return boost::make_iterator_range(source_boundary, source_boundary + num_source_nodes);
@@ -191,6 +200,7 @@ template <storage::Ownership Ownership> class CellStorageImpl
                  WeightPtrT const all_weights,
                  DurationPtrT const all_durations,
                  DistancePtrT const all_distances,
+                 WeightPtrT const all_eccentricities,
                  const NodeID *const all_sources,
                  const NodeID *const all_destinations)
             : num_source_nodes{data.num_source_nodes},
@@ -198,25 +208,27 @@ template <storage::Ownership Ownership> class CellStorageImpl
                                                                          data.value_offset},
               durations{all_durations + data.value_offset}, distances{all_distances +
                                                                       data.value_offset},
+              eccentricities{all_eccentricities + data.source_boundary_offset},
               source_boundary{all_sources + data.source_boundary_offset},
               destination_boundary{all_destinations + data.destination_boundary_offset}
         {
             BOOST_ASSERT(all_weights != nullptr);
             BOOST_ASSERT(all_durations != nullptr);
             BOOST_ASSERT(all_distances != nullptr);
+            BOOST_ASSERT(all_eccentricities != nullptr);
             BOOST_ASSERT(num_source_nodes == 0 || all_sources != nullptr);
             BOOST_ASSERT(num_destination_nodes == 0 || all_destinations != nullptr);
         }
 
-        // Consturcts an emptry cell without weights. Useful when only access
+        // Constructs an empty cell without weights. Useful when only access
         // to the cell structure is needed, without a concrete metric.
         CellImpl(const CellData &data,
                  const NodeID *const all_sources,
                  const NodeID *const all_destinations)
             : num_source_nodes{data.num_source_nodes},
               num_destination_nodes{data.num_destination_nodes}, weights{nullptr},
-              durations{nullptr}, distances{nullptr}, source_boundary{all_sources +
-                                                                      data.source_boundary_offset},
+              durations{nullptr}, distances{nullptr}, eccentricities{nullptr},
+              source_boundary{all_sources + data.source_boundary_offset},
               destination_boundary{all_destinations + data.destination_boundary_offset}
         {
             BOOST_ASSERT(num_source_nodes == 0 || all_sources != nullptr);
@@ -373,10 +385,12 @@ template <storage::Ownership Ownership> class CellStorageImpl
         const auto &last_cell = cells.back();
         ValueOffset total_size =
             last_cell.value_offset + last_cell.num_source_nodes * last_cell.num_destination_nodes;
+        ValueOffset total_sources = last_cell.source_boundary_offset + last_cell.num_source_nodes;
 
         metric.weights.resize(total_size + 1, INVALID_EDGE_WEIGHT);
         metric.durations.resize(total_size + 1, MAXIMAL_EDGE_DURATION);
         metric.distances.resize(total_size + 1, INVALID_EDGE_DISTANCE);
+        metric.eccentricities.resize(total_sources, 0);
 
         return metric;
     }
@@ -405,6 +419,7 @@ template <storage::Ownership Ownership> class CellStorageImpl
                          metric.weights.data(),
                          metric.durations.data(),
                          metric.distances.data(),
+                         metric.eccentricities.data(),
                          source_boundary.empty() ? nullptr : source_boundary.data(),
                          destination_boundary.empty() ? nullptr : destination_boundary.data()};
     }
@@ -433,6 +448,7 @@ template <storage::Ownership Ownership> class CellStorageImpl
                     metric.weights.data(),
                     metric.durations.data(),
                     metric.distances.data(),
+                    metric.eccentricities.data(),
                     source_boundary.data(),
                     destination_boundary.data()};
     }

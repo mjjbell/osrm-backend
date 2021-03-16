@@ -78,6 +78,28 @@ void insertNodesInHeaps(Heap &forward_heap, Heap &reverse_heap, const PhantomNod
     }
 }
 
+
+template <typename ManyToManyQueryHeap>
+void insertIsochroneSourceInHeap(ManyToManyQueryHeap &heap, const PhantomNode &phantom_node)
+{
+    if (phantom_node.IsValidForwardSource())
+    {
+        heap.Insert(phantom_node.forward_segment_id.id,
+                    -phantom_node.GetForwardDuration(),
+                    {phantom_node.forward_segment_id.id,
+                     -phantom_node.GetForwardDuration(),
+                     -phantom_node.GetForwardDistance()});
+    }
+    if (phantom_node.IsValidReverseSource())
+    {
+        heap.Insert(phantom_node.reverse_segment_id.id,
+                    -phantom_node.GetReverseDuration(),
+                    {phantom_node.reverse_segment_id.id,
+                     -phantom_node.GetReverseDuration(),
+                     -phantom_node.GetReverseDistance()});
+    }
+}
+
 template <typename ManyToManyQueryHeap>
 void insertSourceInHeap(ManyToManyQueryHeap &heap, const PhantomNode &phantom_node)
 {

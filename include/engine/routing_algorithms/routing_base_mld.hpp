@@ -74,14 +74,14 @@ inline LevelID getNodeQueryLevel(const MultiLevelPartition &partition,
                                  const NodeID node,
                                  const PhantomNode &phantom_node)
 {
-    auto highest_diffrent_level = [&partition, node](const SegmentID &phantom_node) {
+    auto highest_different_level = [&partition, node](const SegmentID &phantom_node) {
         if (phantom_node.enabled)
             return partition.GetHighestDifferentLevel(phantom_node.id, node);
         return INVALID_LEVEL_ID;
     };
 
-    const auto node_level = std::min(highest_diffrent_level(phantom_node.forward_segment_id),
-                                     highest_diffrent_level(phantom_node.reverse_segment_id));
+    const auto node_level = std::min(highest_different_level(phantom_node.forward_segment_id),
+                                     highest_different_level(phantom_node.reverse_segment_id));
 
     return node_level;
 }

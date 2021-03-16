@@ -10,6 +10,7 @@
 #include "engine/datafacade_provider.hpp"
 #include "engine/engine_config.hpp"
 #include "engine/plugins/match.hpp"
+#include "engine/plugins/isochrone.hpp"
 #include "engine/plugins/nearest.hpp"
 #include "engine/plugins/table.hpp"
 #include "engine/plugins/tile.hpp"
@@ -38,6 +39,7 @@ class EngineInterface
                            api::ResultT &result) const = 0;
     virtual Status Trip(const api::TripParameters &parameters, api::ResultT &result) const = 0;
     virtual Status Match(const api::MatchParameters &parameters, api::ResultT &result) const = 0;
+    virtual Status Isochrone(const api::IsochroneParameters &parameters, api::ResultT &result) const = 0;
     virtual Status Tile(const api::TileParameters &parameters, api::ResultT &result) const = 0;
 };
 
@@ -110,6 +112,11 @@ template <typename Algorithm> class Engine final : public EngineInterface
         return match_plugin.HandleRequest(GetAlgorithms(params), params, result);
     }
 
+    Status Isochrone(const api::IsochroneParameters &params, api::ResultT &result) const override final
+    {
+        return isochrone_plugin.HandleRequest(GetAlgorithms(params), params, result);
+    }
+
     Status Tile(const api::TileParameters &params, api::ResultT &result) const override final
     {
         return tile_plugin.HandleRequest(GetAlgorithms(params), params, result);
@@ -128,6 +135,7 @@ template <typename Algorithm> class Engine final : public EngineInterface
     const plugins::NearestPlugin nearest_plugin;
     const plugins::TripPlugin trip_plugin;
     const plugins::MatchPlugin match_plugin;
+    const plugins::IsochronePlugin isochrone_plugin;
     const plugins::TilePlugin tile_plugin;
 };
 } // namespace engine

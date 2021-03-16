@@ -50,6 +50,9 @@ template <typename AlgorithmT> struct HasMapMatching final : std::false_type
 template <typename AlgorithmT> struct HasManyToManySearch final : std::false_type
 {
 };
+template <typename AlgorithmT> struct HasIsochroneSearch final : std::false_type
+{
+};
 template <typename AlgorithmT> struct SupportsDistanceAnnotationType final : std::false_type
 {
 };
@@ -76,6 +79,9 @@ template <> struct HasMapMatching<ch::Algorithm> final : std::true_type
 template <> struct HasManyToManySearch<ch::Algorithm> final : std::true_type
 {
 };
+template <> struct HasIsochroneSearch<ch::Algorithm> final : std::false_type
+{
+};
 template <> struct SupportsDistanceAnnotationType<ch::Algorithm> final : std::true_type
 {
 };
@@ -100,6 +106,9 @@ template <> struct HasMapMatching<mld::Algorithm> final : std::true_type
 {
 };
 template <> struct HasManyToManySearch<mld::Algorithm> final : std::true_type
+{
+};
+template <> struct HasIsochroneSearch<mld::Algorithm> final : std::true_type
 {
 };
 template <> struct SupportsDistanceAnnotationType<mld::Algorithm> final : std::false_type

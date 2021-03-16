@@ -122,6 +122,11 @@ Status OSRM::Match(const MatchParameters &params, engine::api::ResultT &result) 
     return engine_->Match(params, result);
 }
 
+Status OSRM::Isochrone(const IsochroneParameters &params, engine::api::ResultT &result) const
+{
+    return engine_->Isochrone(params, result);
+}
+
 Status OSRM::Tile(const engine::api::TileParameters &params, std::string &str_result) const
 {
     osrm::engine::api::ResultT result = std::string();

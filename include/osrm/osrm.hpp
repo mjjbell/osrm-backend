@@ -39,6 +39,7 @@ namespace osrm
 {
 namespace json = util::json;
 using engine::EngineConfig;
+using engine::api::IsochroneParameters;
 using engine::api::MatchParameters;
 using engine::api::NearestParameters;
 using engine::api::RouteParameters;
@@ -126,6 +127,9 @@ class OSRM final
      */
     Status Match(const MatchParameters &parameters, json::Object &result) const;
     Status Match(const MatchParameters &parameters, engine::api::ResultT &result) const;
+
+
+    Status Isochrone(const IsochroneParameters &parameters, engine::api::ResultT &result) const;
 
     /**
      * Tile: vector tiles with internal graph representation

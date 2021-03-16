@@ -7,6 +7,7 @@
 #include "engine/routing_algorithms/alternative_path.hpp"
 #include "engine/routing_algorithms/direct_shortest_path.hpp"
 #include "engine/routing_algorithms/many_to_many.hpp"
+#include "engine/routing_algorithms/isochrone.hpp"
 #include "engine/routing_algorithms/map_matching.hpp"
 #include "engine/routing_algorithms/shortest_path.hpp"
 #include "engine/routing_algorithms/tile_turns.hpp"
@@ -36,6 +37,9 @@ class RoutingAlgorithmsInterface
                      const std::vector<std::size_t> &target_indices,
                      const bool calculate_distance) const = 0;
 
+    virtual void
+    IsochroneSearch(PhantomNode &phantom_nodes) const = 0;
+
     virtual routing_algorithms::SubMatchingList
     MapMatching(const routing_algorithms::CandidateLists &candidates_list,
                 const std::vector<util::Coordinate> &trace_coordinates,
@@ -54,6 +58,7 @@ class RoutingAlgorithmsInterface
     virtual bool HasDirectShortestPathSearch() const = 0;
     virtual bool HasMapMatching() const = 0;
     virtual bool HasManyToManySearch() const = 0;
+    virtual bool HasIsochroneSearch() const = 0;
     virtual bool SupportsDistanceAnnotationType() const = 0;
     virtual bool HasGetTileTurns() const = 0;
     virtual bool HasExcludeFlags() const = 0;
@@ -88,6 +93,9 @@ template <typename Algorithm> class RoutingAlgorithms final : public RoutingAlgo
                      const std::vector<std::size_t> &source_indices,
                      const std::vector<std::size_t> &target_indices,
                      const bool calculate_distance) const final override;
+
+    virtual void
+    IsochroneSearch(PhantomNode &phantom_nodes) const final override;
 
     routing_algorithms::SubMatchingList
     MapMatching(const routing_algorithms::CandidateLists &candidates_list,
@@ -125,6 +133,11 @@ template <typename Algorithm> class RoutingAlgorithms final : public RoutingAlgo
     bool HasManyToManySearch() const final override
     {
         return routing_algorithms::HasManyToManySearch<Algorithm>::value;
+    }
+
+    bool HasIsochroneSearch() const final override
+    {
+        return routing_algorithms::HasIsochroneSearch<Algorithm>::value;
     }
 
     bool SupportsDistanceAnnotationType() const final override
@@ -220,6 +233,12 @@ RoutingAlgorithms<Algorithm>::ManyToManySearch(const std::vector<PhantomNode> &p
                                                 std::move(source_indices),
                                                 std::move(target_indices),
                                                 calculate_distance);
+}
+
+template <typename Algorithm>
+void RoutingAlgorithms<Algorithm>::IsochroneSearch(PhantomNode &phantom_node) const
+{
+    routing_algorithms::isochroneSearch(heaps, *facade, phantom_node);
 }
 
 template <typename Algorithm>

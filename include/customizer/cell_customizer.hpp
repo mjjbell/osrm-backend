@@ -62,14 +62,37 @@ class CellCustomizer
             }
             heap.Clear();
             heap.Insert(source, 0, {false, 0, 0});
+            EdgeWeight eccentricity = 0;
 
             // explore search space
-            while (!heap.Empty() && !destinations_set.empty())
+            while (!heap.Empty())
             {
                 const NodeID node = heap.DeleteMin();
                 const EdgeWeight weight = heap.GetKey(node);
                 const EdgeDuration duration = heap.GetData(node).duration;
                 const EdgeDistance distance = heap.GetData(node).distance;
+
+                if (level == 1) {
+                    eccentricity =  weight;
+                } else {
+                    // If this comes from a clique edge, we've already included the eccentricity
+                    // for this sub-cell connected component. No point including it again as it may
+                    // just loosen the upper bound further.
+                    if (!heap.GetData(node).from_clique) {
+                        auto subcell_id = partition.GetCell(level - 1, node);
+                        auto subcell = cells.GetCell(metric, level - 1, subcell_id);
+                        auto subcell_eccentricity = subcell.GetEccentricity(node);
+                        if (subcell_eccentricity != nullptr) {
+                            // This is a source boundary node
+                            // TODO: check this is the case
+                            eccentricity = std::max(eccentricity, *subcell_eccentricity + weight);
+                        } else {
+                            // destination boundary node
+                            // TODO: check this is the case
+                            eccentricity = std::max(eccentricity, weight);
+                        }
+                    }
+                }
 
                 RelaxNode(graph,
                           cells,
@@ -109,6 +132,10 @@ class CellCustomizer
             BOOST_ASSERT(weights.empty());
             BOOST_ASSERT(durations.empty());
             BOOST_ASSERT(distances.empty());
+
+            auto source_eccentricity = cell.GetEccentricity(source);
+            BOOST_ASSERT(source_eccentricity != nullptr);
+            *source_eccentricity = eccentricity;
         }
     }
 
@@ -175,6 +202,9 @@ class CellCustomizer
                         const NodeID to = *subcell_destination;
                         if (!allowed_nodes[to])
                         {
+                            // This should never happen. If destination node is not allowed, subcell weight from
+                            // this source has to be INVALID.
+                            BOOST_ASSERT(false);
                             continue;
                         }
 

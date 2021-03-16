@@ -250,7 +250,7 @@ template <storage::Ownership Ownership> class MultiLevelPartitionImpl final
         partition.resize(num_nodes + 1, 0);
         NodeID sentinel = num_nodes;
 
-        // Sort nodes bottum-up by cell id.
+        // Sort nodes bottom-up by cell id.
         // This ensures that we get a nice grouping from parent to child cells:
         //
         // intitial:

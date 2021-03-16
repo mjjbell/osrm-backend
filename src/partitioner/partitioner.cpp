@@ -111,7 +111,7 @@ int Partitioner::Run(const PartitionerConfig &config)
         const auto forward_node = entry.forward_ebg_node;
         const auto backward_node = entry.backward_ebg_node;
 
-        // This heuristic strategy seems to work best, even beating chosing the minimum
+        // This heuristic strategy seems to work best, even beating choosing the minimum
         // border edge bisection ID
         edge_based_partition_ids[forward_node] = node_based_partition_ids[u];
         if (backward_node != SPECIAL_NODEID)

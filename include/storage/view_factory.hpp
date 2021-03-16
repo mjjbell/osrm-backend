@@ -300,13 +300,14 @@ inline auto make_filtered_cell_metric_view(const SharedDataIndex &index,
     auto weights_block_id = prefix + "/weights";
     auto durations_block_id = prefix + "/durations";
     auto distances_block_id = prefix + "/distances";
+    auto eccentricites_block_id = prefix + "/eccentricities";
 
     auto weights = make_vector_view<EdgeWeight>(index, weights_block_id);
     auto durations = make_vector_view<EdgeDuration>(index, durations_block_id);
     auto distances = make_vector_view<EdgeDistance>(index, distances_block_id);
+    auto eccentricities = make_vector_view<EdgeWeight>(index, eccentricites_block_id);
 
-    return customizer::CellMetricView{
-        std::move(weights), std::move(durations), std::move(distances)};
+    return customizer::CellMetricView{weights, durations, distances, eccentricities};
 }
 
 inline auto make_cell_metric_view(const SharedDataIndex &index, const std::string &name)
@@ -320,13 +321,15 @@ inline auto make_cell_metric_view(const SharedDataIndex &index, const std::strin
         auto weights_block_id = prefix + "/weights";
         auto durations_block_id = prefix + "/durations";
         auto distances_block_id = prefix + "/distances";
+        auto eccentricites_block_id = prefix + "/eccentricities";
 
         auto weights = make_vector_view<EdgeWeight>(index, weights_block_id);
         auto durations = make_vector_view<EdgeDuration>(index, durations_block_id);
         auto distances = make_vector_view<EdgeDistance>(index, distances_block_id);
+        auto eccentricities = make_vector_view<EdgeWeight>(index, eccentricites_block_id);
 
         cell_metric_excludes.push_back(customizer::CellMetricView{
-            std::move(weights), std::move(durations), std::move(distances)});
+            weights, durations, distances, eccentricities});
     }
 
     return cell_metric_excludes;

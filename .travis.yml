@@ -13,6 +13,7 @@ notifications:
 branches:
   only:
     - master
+    - travis
     # enable building tags
     - /^v\d+\.\d+(\.\d+)?(-\S*)?$/
 
@@ -572,3 +573,13 @@ script:
   - |
   - popd
   - npm test
+
+deploy:
+  provider: releases
+  api_key:
+    secure: "lP+1HcUlAgn7kVyFpUEw5cR7UKIIh1TWcl71mBjknt/GoNTCrx5Xm09zeK5ieq3L+Q9wh2t0kYJgaTZ069PCVYQY8vz4PoMMECTA3oXTLSxA0xS4rVZP36rCLr5A2Bk53C+o73yYvmQLbpa+8cFqu8JoMCZkp/as6fLAmhadU5ecrDruJZBv9EvkJAe0e/kbqUhgBvAWEV9p6XpVsTHaE+4v0AR8HdEmNQuMcu3bX9/EOg3DAUxoN6QI9xxi/9zSpKjZ/vaK8Nrs2skTczC3o00y5rLuSHx23DvI65w6STzT7mTJy4eZSikG2IxdXCY8HdjOcA168g7HLzjmh/84E4nOyof+/eSdKBx1iI6960Z/doDPQl+OTV9cVBgycBVW8TZ8MjK5/3/5bbKQK25G5KYOImJacR4T0vPZG7DfUMtlJyRXky+pmQ9DmDQec6exXOLUWh0EjQUE2C8idlOKzfX4odqyw3NDwQQh+9PTKJC6nIU+qegETW5lxLlKw/P0T6xA9E2m3fm2ZyStuVj07hpOrJBoohqwDL1DX5XUnvTaiFqLeF0i3CbbCnGUwy7xyf/vKNpo+f5ry5QaWtD4cx1FUQnsVuYnfXEUxXMMW1w7bE5yw8ltYS7VUZ5eJx56IB5BtQrfmZaimDjSk0EmtrRHeRjPScaY124spDKqvyY="
+  file: $(./node_modules/.bin/node-pre-gyp reveal staged_tarball --silent)
+  skip_cleanup: true
+  on:
+    tags: true
+    condition: $PUBLISH = 'On'

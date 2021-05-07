@@ -653,7 +653,7 @@ deploy:
     secure: "hxZyVYwY9Vp7phaCUphKwHkiU8wIzi/5Mu7Xa997PnDTAO6B/QF5svwxiG84uzTegbWO79xKeVD14hPEm76m0ATxOWPJxsSIVsXuSLcjAX0qWqongLwgmDmEq6OQ0PxWxgAOzk/tqUBeyJEJ8rwCGBBoawBhJru6beTU5dLxf1q8uyHr5K9BtMYcidzViGvKsOv6F3UkbJQSM0C9xWL3+7Gqjv56ezBG1b7dMSfoz7FUOEidRI//psqEr1I+gXnpPBfa8bhQXhuycITXRybuU2+HbQf3Y7cLyuEAt2uVkZxo+N4CX866N7QKQJVGKGi//6viKEi1k/I6KDLDP+8V5wBTZo4fHDCxk1on2k8JxIGELttV1JOayg1FUXfBRpRKV9ueMLGH4U50k5wS37/oWAtoXHD13lQhhBKicIHKGRgA5Wsqm4eZFob01yMRa8bY+yFSOqsHkBW41FKwtWGV15WfxgPWU6GdsuE5gskTB1qw/zDSWyZfcdCpVEqAgu2kzlUasEo9W82wrjoBL9U4xAr4OkVRXQVzg0XFOjgQsbxJ11FkRegeQrKtY8K0dn43gYTZWLvTX1mCr9T80CUzOsphspDBGiisxyz0hfGw6/u0Gej3YkX+IZqV0dZBUVnQV4AJNvhZpdum+PTlrgro5XJ+6LtIOskUpuRJSqM/dBc="
   skip_cleanup: true
   file_glob: true
-  file: build/stage/**/.tar.gz
+  file: build/stage/**/*.tar.gz
   on:
     tags: true
     condition: "$PUBLISH = 'On'"

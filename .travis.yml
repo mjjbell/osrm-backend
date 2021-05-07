@@ -649,10 +649,10 @@ script:
 - npm test
 deploy:
   provider: releases
-  edge: true
+  api_key:
+    secure: "iVDuf8nf3uWOgtmaliGiU62TFTE5+MCa0zQ+Oa/E/FJ0bl7+BasQmr17K4YX8JOqCvBWkoJYrzouCYxxrILmuhTzwPpZRHpXZ0mhW/1dmH6MQH8znemRRLsy+ItPW8nYWrpuGeABEiabFQAvasCQnUPm3A+QbG/qRR8EfknULfsCpMacmuVQyh4mLjE1ogJdoc0NIkr96R6ZSmMhCI/Is0v9632MuYLbAf8T59/C3sbeHoZSkTbL5nOokJCPKxk1vAHHm5xulo9euatPL2zsK2n0LJpIs9ftUtdYqsGI8oi1l0wnP8VxYOqIxMmf9kR3GMur4UbmDRXhT5gTjyw4lyWDjWm6FibSCHL6EZ4L72pWRF8BsDfz2+qhbibudDy1zPdQpkRO3NUARSV6L12+y4sZGm4/A+9V4Zrr0dlGaEBNwNczjxW0G2UmGBraRJABSkutXmeSOMdu9T6YWh4Nd+9ygvIZFbiaStx6gvGSHFdchQlLzhTs6mzwk0nbt91o3D1EG0fA11NZZd79YdTnBRaRTEOnIpC4Jpmf9W9+4OEvEylSYLWWMEmhh/4W076Uk3gkHT8ourzooMOahsGDL/yRAavt504ss2EDkJxon5NHI3MKwU70E6+VAsRKI8z+lCTqy+1QYEkM+Lhrg/DSAtAI5t1L7Fc37utL1V/uZGU="
+  skip_cleanup: true
   file: "$(./node_modules/.bin/node-pre-gyp reveal staged_tarball --silent)"
   on:
     tags: true
     condition: "$PUBLISH = 'On'"
-  token:
-    secure: f+aRxvSNJbfGI7zFeGpyXyHOCVHZWeLn34Yeoqt6E/e+aKxBrCo9Jc8LchwhtyI0poqa0T3VEBK0Z+2DAGBconI/2ni97RHCBzwTuEZONRU1faUjwnaWXyuXI9hhVPafBZfMSLxVQmc4IYpitb0RzfNSSWSddDJSHRRfUd3isu11CsjmMoxXYXnquCzZ1ZTFANBHMfS8FBQRemw/jsPgoaJK0/x9qYDIzZO4C/KiU7nuGdPGJWys8WILDhxzCWaFwgMyjfhSXePzG+HVJ+2+A5SOsfA3Wj/jgnJ4YKIJqgKfghjLOJe5VPKbXn7RFWCMo9dMccoXmArTiJk5MdjoFZXf3ViK8URnUyEBa6Z5sH/crLCamdSfBYjGB/hIfFItxlNOHiQACtCurQ+Id7ZdPQOXIuivv4f52iG5ZM2MzL+Zyjvymz2AJf3OxsKDvcQrS0WuX6iawdyQI50QZtZ2/SPUxAreFujqkFYwsHPn6Sg+kzGZeVMuP2V7Y7OZeqH74uplMJEuoXC2b98/zViTqEwqjMweH3FXuYA4e/GS7kd44B+xpsNM27dgzk6G48aOJFKqTPwtED8TqvkaGa78PnVm8R4xo+QErmdZzwaozpa4VYEvnburjrGXJ6OwmJkQSD/wc2D6kXzAlp8yQCz7D8y/p68LDgiHvTqs688yuo4=

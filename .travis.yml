@@ -37,7 +37,7 @@ matrix:
     compiler: format-taginfo-docs
     env: NODE=10
     sudo: false
-    before_install: 
+    before_install:
     install:
     - curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.34.0/install.sh
       | bash
@@ -52,7 +52,7 @@ matrix:
     - PATH=$(${MASON} prefix clang-format 10.0.0)/bin:${PATH} ./scripts/format.sh
       && ./scripts/error_on_dirty.sh
     - node ./scripts/validate_changelog.js
-    after_success: 
+    after_success:
   - os: linux
     compiler: gcc-7-debug-cov
     addons:
@@ -655,4 +655,4 @@ deploy:
     tags: true
     condition: "$PUBLISH = 'On'"
   token:
-    secure: eIXBIxSoDDDzBHjcpzfW80AT0nDQ4wXrIoKLrDKxLQ0uJIzqMhMfLI4Ms4B4JOxfvF2PSrisJBvYT1+cHGCQQuJBsQQ65Car6hGmqYltpH1cQy6xPY+Ol6KMA/iz50yoC+UFTFLWaKGCyCwQyGjlD/MHt7VpZiBQ8RkeV+T3P8kxCF6TrjVJw4Upt3kj2AUHchTRXCrCjFNMPqmiyKMoG/gLTSIZ3wIQKoaiOcSymqO+lHiEnvZn7wayvOIQpMRrOe4UX4APXBCRj+VVa1Rf8erfZPaaIEQphWRPhxKwAJTsXWyC8Ceyc0mUPHacZsDVTXNAEggffG1enH0Dm5o9meRJnh6SfpZLi4KO5CogAChF8GRjYKNkwkXjPIAp9o0vHJO27pkOP5oa3L0GSY49viA/+qaC7Od8+s1tMvr/GjGwYDMW3QZtq+mXmUnxkVPty5eDTO6mgpeY3dc/X7Fml48YsBJNXkBEhhQlcw7mpAnb+6qUNjzsX4xcrv6rsV6JXsz4Lg4ueVuI0Mjpy2bN1l5Wm4+r4O8u6JgqjLS7glq0UcGwZcdaxG5PGa2u9bUCkoywI08f9EelbeYhjzBYdJcgaDo6ZWvqrQa4Nm1f/rBIF3spwTKUBO/SZzJm8qEwPYN4sL8BF5Nb97IsdJKLjss0tb87Fiuf7GrFzYO8G8s=
+    secure: f+aRxvSNJbfGI7zFeGpyXyHOCVHZWeLn34Yeoqt6E/e+aKxBrCo9Jc8LchwhtyI0poqa0T3VEBK0Z+2DAGBconI/2ni97RHCBzwTuEZONRU1faUjwnaWXyuXI9hhVPafBZfMSLxVQmc4IYpitb0RzfNSSWSddDJSHRRfUd3isu11CsjmMoxXYXnquCzZ1ZTFANBHMfS8FBQRemw/jsPgoaJK0/x9qYDIzZO4C/KiU7nuGdPGJWys8WILDhxzCWaFwgMyjfhSXePzG+HVJ+2+A5SOsfA3Wj/jgnJ4YKIJqgKfghjLOJe5VPKbXn7RFWCMo9dMccoXmArTiJk5MdjoFZXf3ViK8URnUyEBa6Z5sH/crLCamdSfBYjGB/hIfFItxlNOHiQACtCurQ+Id7ZdPQOXIuivv4f52iG5ZM2MzL+Zyjvymz2AJf3OxsKDvcQrS0WuX6iawdyQI50QZtZ2/SPUxAreFujqkFYwsHPn6Sg+kzGZeVMuP2V7Y7OZeqH74uplMJEuoXC2b98/zViTqEwqjMweH3FXuYA4e/GS7kd44B+xpsNM27dgzk6G48aOJFKqTPwtED8TqvkaGa78PnVm8R4xo+QErmdZzwaozpa4VYEvnburjrGXJ6OwmJkQSD/wc2D6kXzAlp8yQCz7D8y/p68LDgiHvTqs688yuo4=

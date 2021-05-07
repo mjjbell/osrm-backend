@@ -650,9 +650,10 @@ script:
 deploy:
   provider: releases
   api_key:
-    secure: "iVDuf8nf3uWOgtmaliGiU62TFTE5+MCa0zQ+Oa/E/FJ0bl7+BasQmr17K4YX8JOqCvBWkoJYrzouCYxxrILmuhTzwPpZRHpXZ0mhW/1dmH6MQH8znemRRLsy+ItPW8nYWrpuGeABEiabFQAvasCQnUPm3A+QbG/qRR8EfknULfsCpMacmuVQyh4mLjE1ogJdoc0NIkr96R6ZSmMhCI/Is0v9632MuYLbAf8T59/C3sbeHoZSkTbL5nOokJCPKxk1vAHHm5xulo9euatPL2zsK2n0LJpIs9ftUtdYqsGI8oi1l0wnP8VxYOqIxMmf9kR3GMur4UbmDRXhT5gTjyw4lyWDjWm6FibSCHL6EZ4L72pWRF8BsDfz2+qhbibudDy1zPdQpkRO3NUARSV6L12+y4sZGm4/A+9V4Zrr0dlGaEBNwNczjxW0G2UmGBraRJABSkutXmeSOMdu9T6YWh4Nd+9ygvIZFbiaStx6gvGSHFdchQlLzhTs6mzwk0nbt91o3D1EG0fA11NZZd79YdTnBRaRTEOnIpC4Jpmf9W9+4OEvEylSYLWWMEmhh/4W076Uk3gkHT8ourzooMOahsGDL/yRAavt504ss2EDkJxon5NHI3MKwU70E6+VAsRKI8z+lCTqy+1QYEkM+Lhrg/DSAtAI5t1L7Fc37utL1V/uZGU="
+    secure: "hxZyVYwY9Vp7phaCUphKwHkiU8wIzi/5Mu7Xa997PnDTAO6B/QF5svwxiG84uzTegbWO79xKeVD14hPEm76m0ATxOWPJxsSIVsXuSLcjAX0qWqongLwgmDmEq6OQ0PxWxgAOzk/tqUBeyJEJ8rwCGBBoawBhJru6beTU5dLxf1q8uyHr5K9BtMYcidzViGvKsOv6F3UkbJQSM0C9xWL3+7Gqjv56ezBG1b7dMSfoz7FUOEidRI//psqEr1I+gXnpPBfa8bhQXhuycITXRybuU2+HbQf3Y7cLyuEAt2uVkZxo+N4CX866N7QKQJVGKGi//6viKEi1k/I6KDLDP+8V5wBTZo4fHDCxk1on2k8JxIGELttV1JOayg1FUXfBRpRKV9ueMLGH4U50k5wS37/oWAtoXHD13lQhhBKicIHKGRgA5Wsqm4eZFob01yMRa8bY+yFSOqsHkBW41FKwtWGV15WfxgPWU6GdsuE5gskTB1qw/zDSWyZfcdCpVEqAgu2kzlUasEo9W82wrjoBL9U4xAr4OkVRXQVzg0XFOjgQsbxJ11FkRegeQrKtY8K0dn43gYTZWLvTX1mCr9T80CUzOsphspDBGiisxyz0hfGw6/u0Gej3YkX+IZqV0dZBUVnQV4AJNvhZpdum+PTlrgro5XJ+6LtIOskUpuRJSqM/dBc="
   skip_cleanup: true
-  file: "$(./node_modules/.bin/node-pre-gyp reveal staged_tarball --silent)"
+  file_glob: true
+  file: build/stage/**/.tar.gz
   on:
     tags: true
     condition: "$PUBLISH = 'On'"

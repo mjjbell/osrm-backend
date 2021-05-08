@@ -31,8 +31,7 @@ if [[ ${PUBLISH} == 'On' ]]; then
         fi
     fi
 
-    ./node_modules/.bin/node-pre-gyp build package $NPM_FLAGS
-    ./node_modules/.bin/node-pre-gyp testpackage $NPM_FLAGS
+    ./node_modules/.bin/node-pre-gyp package testpackage $NPM_FLAGS
 else
     echo "PUBLISH is set to '${PUBLISH}', skipping."
 fi

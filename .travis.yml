@@ -220,21 +220,21 @@ matrix:
     env: ENABLE_MASON=ON BUILD_TYPE='Release' CUCUMBER_TIMEOUT=60000 CCOMPILER='clang'
       CXXCOMPILER='clang++' ENABLE_ASSERTIONS=ON ENABLE_LTO=ON NODE="10"
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: osx
     osx_image: xcode9.2
     compiler: mason-osx-release-node-12
     env: ENABLE_MASON=ON BUILD_TYPE='Release' CUCUMBER_TIMEOUT=60000 CCOMPILER='clang'
       CXXCOMPILER='clang++' ENABLE_ASSERTIONS=ON ENABLE_LTO=ON NODE="12"
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: osx
     osx_image: xcode9.2
     compiler: mason-osx-release-node-14
     env: ENABLE_MASON=ON BUILD_TYPE='Release' CUCUMBER_TIMEOUT=60000 CCOMPILER='clang'
       CXXCOMPILER='clang++' ENABLE_ASSERTIONS=ON ENABLE_LTO=ON NODE="14"
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     compiler: gcc-7-release-shared
     addons:
@@ -275,7 +275,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-14-mason-linux-debug
@@ -301,7 +301,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-12-mason-linux-release
@@ -327,7 +327,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-12-mason-linux-debug
@@ -353,7 +353,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-10-mason-linux-release
@@ -379,7 +379,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-10-mason-linux-debug
@@ -405,7 +405,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: osx
     stage: optional
     osx_image: xcode9.2
@@ -413,7 +413,7 @@ matrix:
     env: ENABLE_MASON=ON BUILD_TYPE='Release' CUCUMBER_TIMEOUT=60000 CCOMPILER='clang'
       CXXCOMPILER='clang++' ENABLE_ASSERTIONS=ON ENABLE_LTO=ON NODE="node"
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-latest-mason-linux-release
@@ -439,7 +439,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-latest-mason-linux-debug
@@ -465,14 +465,14 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: osx
     osx_image: xcode9.2
     compiler: mason-osx-release-node-lts
     env: ENABLE_MASON=ON BUILD_TYPE='Release' CUCUMBER_TIMEOUT=60000 CCOMPILER='clang'
       CXXCOMPILER='clang++' ENABLE_ASSERTIONS=ON ENABLE_LTO=ON NODE="--lts"
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-lts-mason-linux-release
@@ -498,7 +498,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   - os: linux
     sudo: false
     compiler: node-lts-mason-linux-debug
@@ -524,7 +524,7 @@ matrix:
     script:
     - npm run nodejs-tests
     after_success:
-    - "./scripts/travis/publish.sh"
+    - "./scripts/travis/node_package.sh"
   allow_failures:
   - compiler: mason-osx-release-node-latest
     env: ENABLE_MASON=ON BUILD_TYPE='Release' CUCUMBER_TIMEOUT=60000 CCOMPILER='clang'

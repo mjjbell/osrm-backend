@@ -1,5 +1,7 @@
 # Unreleased
-
+  - Changes from 5.25.0
+    - Routing:
+      - CHANGED: Lazily generate optional route path data [#6045](https://github.com/Project-OSRM/osrm-backend/pull/6045)
 # 5.25.0
   - Changes from 5.24.0
     - Build:

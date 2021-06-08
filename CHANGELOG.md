@@ -1,5 +1,7 @@
 # Unreleased
-
+  - Changes from 5.25.0
+    - Routing:
+      - ADDED: Add support for non-round-trips with a single fixed endpoint. [#6050](https://github.com/Project-OSRM/osrm-backend/pull/6050)
 # 5.25.0
   - Changes from 5.24.0
     - Build:

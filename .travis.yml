@@ -63,8 +63,7 @@ matrix:
         - ${MASON} install clang-format 10.0.0
         - PATH=$(${MASON} prefix clang-format 10.0.0)/bin:${PATH} ./scripts/format.sh && ./scripts/error_on_dirty.sh
         - node ./scripts/validate_changelog.js
-        # See issue 4043
-        #- npm run docs && ./scripts/error_on_dirty.sh
+        - npm run docs && ./scripts/error_on_dirty.sh
       after_success:
 
     - os: linux

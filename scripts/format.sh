@@ -21,6 +21,8 @@ fi
 # Discover clang-format
 if type clang-format-10.0.0 2> /dev/null ; then
     CLANG_FORMAT=clang-format-10.0.0
+elif type clang-format-10 2> /dev/null ; then
+    CLANG_FORMAT=clang-format-10
 elif type clang-format 2> /dev/null ; then
     # Clang format found, but need to check version
     CLANG_FORMAT=clang-format

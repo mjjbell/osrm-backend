@@ -419,12 +419,12 @@ EdgeBasedGraphFactory::GenerateEdgeExpandedNodes(const WayRestrictionMap &way_re
             const EdgeData &forward_data = m_node_based_graph.GetEdgeData(eid);
 
             const auto edge_id_to_segment_id = [](const NodeID edge_based_node_id) {
-              if (edge_based_node_id == SPECIAL_NODEID)
-              {
-                  return SegmentID{SPECIAL_SEGMENTID, false};
-              }
+                if (edge_based_node_id == SPECIAL_NODEID)
+                {
+                    return SegmentID{SPECIAL_SEGMENTID, false};
+                }
 
-              return SegmentID{edge_based_node_id, true};
+                return SegmentID{edge_based_node_id, true};
             };
 
             // Add segments of edge-based nodes
@@ -436,16 +436,16 @@ EdgeBasedGraphFactory::GenerateEdgeExpandedNodes(const WayRestrictionMap &way_re
                 if (current_edge_target_coordinate_id == current_edge_source_coordinate_id)
                     continue;
 
-                BOOST_ASSERT(current_edge_target_coordinate_id != current_edge_source_coordinate_id);
+                BOOST_ASSERT(current_edge_target_coordinate_id !=
+                             current_edge_source_coordinate_id);
 
                 // build edges
-                m_edge_based_node_segments.emplace_back(
-                    edge_id_to_segment_id(edge_based_node_id),
-                    SegmentID{SPECIAL_SEGMENTID, false},
-                    current_edge_source_coordinate_id,
-                    current_edge_target_coordinate_id,
-                    i,
-                    forward_data.flags.startpoint);
+                m_edge_based_node_segments.emplace_back(edge_id_to_segment_id(edge_based_node_id),
+                                                        SegmentID{SPECIAL_SEGMENTID, false},
+                                                        current_edge_source_coordinate_id,
+                                                        current_edge_target_coordinate_id,
+                                                        i,
+                                                        forward_data.flags.startpoint);
 
                 current_edge_source_coordinate_id = current_edge_target_coordinate_id;
             }

@@ -450,6 +450,13 @@ EdgeBasedGraphFactory::GenerateEdgeExpandedNodes(const WayRestrictionMap &way_re
                 current_edge_source_coordinate_id = current_edge_target_coordinate_id;
             }
 
+            // Include duplicate nodes in cnbg to ebg mapping. This means a
+            // compressed node pair (u,v) can appear multiple times in this list.
+            // This is needed by the MLD partition step to ensure duplicate nodes
+            // are also assigned to partitions (the MLD partitioner is currently
+            // the only consumer of this mapping).
+            mapping.push_back(NBGToEBG{node_u, node_v, edge_based_node_id, SPECIAL_NODEID});
+
             edge_based_node_id++;
             progress.PrintStatus(progress_counter++);
         }

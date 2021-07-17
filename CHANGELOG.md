@@ -1,4 +1,7 @@
 # Unreleased
+  - Changes from 5.24.0
+    - Routing:
+      - FIXED: Fix generation of inefficient MLD partitions [#6084](https://github.com/Project-OSRM/osrm-backend/pull/6084)
 
 # 5.25.0
   - Changes from 5.24.0
